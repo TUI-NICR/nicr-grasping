@@ -1,0 +1,10 @@
+__pycache__
+*.png
+*.code-workspace
+.vscode
+.pytest_cache
+*.egg-info
+notebooks
+coverage.xml
+doc/notes_duag.txt
+build/
