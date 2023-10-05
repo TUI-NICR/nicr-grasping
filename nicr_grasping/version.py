@@ -1,8 +1,8 @@
 # -*- coding: utf-8 -*-
 
 _VERSION_MAJOR = 0
-_VERSION_MINOR = 0
-_VERSION_MICRO = 1
+_VERSION_MINOR = 1
+_VERSION_MICRO = 0
 _VERSION_SUFFIX = ""
 
 

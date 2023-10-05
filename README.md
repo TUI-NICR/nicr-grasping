@@ -15,5 +15,15 @@ This should only be necessary if you want to use this repository for evaluation.
 
 This repository was used for the following publications
 
-## IROS2022 - On the Importance of Label Encoding and Uncertainty Estimation for Robotic Grasp Detection
-For more details see [here](projects/iros2022_graspnet_uncertainties.md).
+### IROS2022 - On the Importance of Label Encoding and Uncertainty Estimation for Robotic Grasp Detection
+For more details see [here](projects/grasp_encodings_and_uncertainties/iros2022_graspnet_uncertainties.md).
+
+### (Submitted) ICRA2024 - GraspTrack: Object and Grasp Pose Tracking for Arbitrary Objects
+For more details see [here](projects/grasptrack/icra2024_grasp_pose_tracking.md).
+
+# Changelog
+**Version 0.1.0 (Oct 5, 2023)**
+- added evaluation pipeline
+- added external dependency to dexnet and meshpy (code is directly included as those packages are not actively maintained and not python3 compatible).
+- added GraspTrack project readme
+- added testcases

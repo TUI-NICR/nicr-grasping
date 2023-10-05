@@ -1,12 +1,5 @@
 # On the Importance of Label Encoding and Uncertainty Estimation for Robotic Grasp Detection
 
----
-
-__NOTICE__: graspnetAPI has a dependency on Open3D which is only available through pip for Python <=3.9.
-This package can be used for newer versions of Python.
-
----
-
 This repository defines the structure of the datasets used for training the models.
 In addition it provides scripts for cleaning the Graspnet-1Billion datasets rectangle grasp lables as described in our paper.
 

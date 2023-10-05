@@ -27,7 +27,12 @@ def run_setup():
               'opencv-python',
               'scikit-image',
               'matplotlib',
-              'torch'
+              'torch',
+              'pandas',
+              'autolab_core',
+              'trimesh',
+              'open3d',
+              'cvxopt'
           ],
           packages=find_packages())
 

@@ -1,11 +1,13 @@
-import numpy as np
 import math
 
+import numpy as np
+from graspnetAPI.grasp import Grasp, RectGrasp, RectGraspGroup, GraspGroup
+from scipy.spatial.transform import Rotation as R
+
+from ..grasp import ParallelGripperGrasp3D, RectangleGrasp, RectangleGraspList, ParallelGripperGrasp3DList
 from . import CONVERTER_REGISTRY
-from ..grasp import RectangleGrasp, RectangleGraspList
 from . import logger as baselogger
 
-from graspnetAPI.grasp import Grasp, RectGrasp, RectGraspGroup
 
 def graspnetrect_to_grasp2d(graspnet_grasp : RectGrasp) -> RectangleGrasp:
 
@@ -54,8 +56,64 @@ def grasp2dlist_to_graspnetrectlist(grasp2dlist : RectangleGraspList) -> RectGra
 
     return res
 
+def grasp3d_to_graspnetgrasp(grasp3d : ParallelGripperGrasp3D) -> Grasp:
+    # params needed: [score, width, height, depth, rotation_matrix(9), translation(3), object_id]
+
+    # definition of grasp is different in MIRA so we need to rotate the grasp
+    rotation_fix = R.from_euler('xy', [90, -90], degrees=True).as_matrix()
+
+    grasp_params = np.zeros(17)
+    grasp_params[0] = grasp3d.quality
+    grasp_params[1] = grasp3d.width
+    grasp_params[2] = grasp3d.height
+
+    # depth of the grasp meaning the length of the yaws
+    # this is fixed to 0.02m in the graspnet dataset
+    grasp_params[3] = 0.02
+
+    grasp_params[4:13] = (grasp3d.orientation @ rotation_fix).reshape(-1)
+    grasp_params[13:16] = grasp3d.position.reshape(-1)
+    grasp_params[16] = -1
+
+    return Grasp(grasp_params)
+
+def parallelgrasp3dlist_to_graspgroup(grasplist: ParallelGripperGrasp3DList) -> GraspGroup:
+    res = GraspGroup()
+    for grasp in grasplist:
+        res.add(CONVERTER_REGISTRY.convert(grasp, Grasp))
+
+    return res
+
+def graspnetgrasp_to_grasp3d(graspnet_grasp : Grasp) -> ParallelGripperGrasp3D:
+    grasp = ParallelGripperGrasp3D()
+
+    rotation_fix = R.from_euler('xy', [90, -90], degrees=True).as_matrix()
+    rotation_fix = np.linalg.inv(rotation_fix)
+
+    grasp.quality = graspnet_grasp.score
+    grasp.width = graspnet_grasp.width
+    grasp.height = graspnet_grasp.height
+
+    grasp.orientation = graspnet_grasp.rotation_matrix @ rotation_fix
+    grasp.position = graspnet_grasp.translation
+
+    return grasp
+
+def graspgroup_to_parallelgrasp3dlist(graspgroup : GraspGroup) -> ParallelGripperGrasp3DList:
+    grasps = []
+    for grasp in graspgroup:
+        grasps.append(CONVERTER_REGISTRY.convert(grasp, ParallelGripperGrasp3D))
+
+    return ParallelGripperGrasp3DList(grasps)
+
 CONVERTER_REGISTRY.register(RectGrasp, RectangleGrasp, graspnetrect_to_grasp2d)
 CONVERTER_REGISTRY.register(RectangleGrasp, RectGrasp, grasp2d_to_graspnetrect)
 
 CONVERTER_REGISTRY.register(RectGraspGroup, RectangleGraspList, graspnetrectlist_to_grasp2dlist)
 CONVERTER_REGISTRY.register(RectangleGraspList, RectGraspGroup, grasp2dlist_to_graspnetrectlist)
+
+CONVERTER_REGISTRY.register(ParallelGripperGrasp3D, Grasp, grasp3d_to_graspnetgrasp)
+CONVERTER_REGISTRY.register(ParallelGripperGrasp3DList, GraspGroup, parallelgrasp3dlist_to_graspgroup)
+
+CONVERTER_REGISTRY.register(Grasp, ParallelGripperGrasp3D, graspnetgrasp_to_grasp3d)
+CONVERTER_REGISTRY.register(GraspGroup, ParallelGripperGrasp3DList, graspgroup_to_parallelgrasp3dlist)

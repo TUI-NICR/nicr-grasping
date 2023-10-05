@@ -1,7 +1,9 @@
 import pytest
 import numpy as np
 
-from nicr_grasping.datatypes.grasp import RectangleGraspList, RectangleGrasp
+import json
+
+from nicr_grasping.datatypes.grasp import RectangleGraspList, RectangleGrasp, ParallelGripperGrasp3DList
 
 
 def test_rectangle_grasp_save_load(rectangle_grasp, tmp_path):
@@ -32,3 +34,15 @@ def test_rectangle_grasp_list_save_load(rectangle_grasp_list, tmp_path):
 
     for g1, g2 in zip(rectangle_grasp_list.grasps, loaded_grasp_list.grasps):
         np.testing.assert_array_equal(g1.points, g2.points)
+
+
+def test_rectanlge_grasp_list_from_mira_xml(grasp_mira_json_file):
+
+    with open(str(grasp_mira_json_file), 'r') as f:
+        json_object = json.load(f)
+
+    for grasps in json_object:
+        grasp_list = ParallelGripperGrasp3DList.from_mira_json(grasps['Second'])
+
+        assert grasp_list[0].quality == 0.750
+        assert grasp_list[1].quality == 0.737

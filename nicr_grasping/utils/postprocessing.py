@@ -115,7 +115,7 @@ def convert_model_output_to_grasps(model_output : List[np.ndarray],
     else:
         # grasp_positions = cv2.findNonZero(quality_map)
         quality_map[quality_map < min_quality] = 0
-        grasp_positions = np.array(np.nonzero(quality_map)).transpose()
+        grasp_positions = np.array(np.nonzero(quality_map))#.transpose()
 
         grasps = []
         for grasp_point_array in grasp_positions:

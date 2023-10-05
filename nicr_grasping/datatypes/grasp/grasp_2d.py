@@ -4,7 +4,6 @@ import abc
 import enum
 from pathlib import Path
 from copy import deepcopy
-import rtree.index
 
 from shapely.geometry import Polygon
 from shapely.affinity import translate, rotate
@@ -18,6 +17,7 @@ from .grasp_base import Grasp
 from ..rotation import Rotation2D
 
 from ..intrinsics import PinholeCameraIntrinsic
+
 
 class RectangleGraspDrawingMode(enum.Enum):
     INNER_RECTANGLE = 0
@@ -76,6 +76,9 @@ class Grasp2D(Grasp):
 
     @property
     def points(self) -> np.ndarray:
+        # points are represented as Nx2
+        # with N points depending on the type of grasp
+        # and (x, y) coordinates for each point
         return self._points
 
     @property
@@ -95,6 +98,9 @@ class Grasp2D(Grasp):
 
     def scale(self, scale_factor: float):
         self._points *= scale_factor
+
+    def translate(self, translation: np.ndarray):
+        self._points += translation
 
     def to_3d(self,
               depth_image: np.ndarray,
@@ -390,12 +396,12 @@ class RectangleGrasp(Grasp2D):
               intrinsic: PinholeCameraIntrinsic,
               depth_lookup_method: DepthLookupMethod = DepthLookupMethod.CENTER_POINT):
 
-        from .grasp_3d import PrallelGripperGrasp3D
+        from .grasp_3d import ParallelGripperGrasp3D
 
         # get base 3d grasp
         # this is missing width and heigt of gripper
         grasp_3d = super().to_3d(depth_image, intrinsic, depth_lookup_method)
-        parallel_grasp = PrallelGripperGrasp3D.from_grasp3d(grasp_3d)
+        parallel_grasp = ParallelGripperGrasp3D.from_grasp3d(grasp_3d)
 
         return parallel_grasp
 

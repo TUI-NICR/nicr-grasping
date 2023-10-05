@@ -1,7 +1,7 @@
 import pytest
 import numpy as np
 from nicr_grasping.datatypes.grasp import RectangleGrasp, RectangleGraspList, Grasp3D
-from nicr_grasping.datatypes.grasp.grasp_3d import PrallelGripperGrasp3D
+from nicr_grasping.datatypes.grasp.grasp_3d import ParallelGripperGrasp3D
 from nicr_grasping.datatypes.intrinsics import PinholeCameraIntrinsic
 
 from nicr_grasping import GRASPNET_INSTALLED
@@ -54,7 +54,7 @@ def grasp_3d():
 
 @pytest.fixture
 def parallel_gripper_grasp():
-    return PrallelGripperGrasp3D(
+    return ParallelGripperGrasp3D(
         1,
         np.array([[0.5, 0.4, 0.8]]),
         points=np.array([[0, 0, 0.8],

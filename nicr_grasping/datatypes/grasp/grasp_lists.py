@@ -2,9 +2,22 @@ import pickle
 import bz2
 
 from collections import UserList
-from typing import Tuple
+from typing import Tuple, List, Union
 
-from .grasp_2d import *
+from pathlib import Path
+
+import numpy as np
+import rtree.index
+from copy import deepcopy
+
+from nicr_grasping.datatypes.grasp.grasp_3d import Grasp3D
+
+from .grasp_base import Grasp
+from .grasp_2d import Grasp2D, RectangleGrasp, RectangleGraspDrawingMode
+from .grasp_3d import Grasp3D, ParallelGripperGrasp3D
+
+from ..transform.pose import Pose
+from ..transform.metrics import DifferenceType, difference
 
 class GraspList(UserList):
     def __init__(self, grasps: List[Grasp] = []) -> None:
@@ -35,6 +48,22 @@ class GraspList(UserList):
     def sort(self, reverse : bool = False) -> None:
         self.data = sorted(self.data, key=lambda x : x.quality, reverse=not reverse)
 
+    def transform(self, transform):
+        transformation_matrix = np.eye(4)
+        if isinstance(transform, Pose):
+            transformation_matrix = transform.transformation_matrix
+        elif isinstance(transform, np.ndarray):
+            transformation_matrix = transform
+        else:
+            raise TypeError("transform must be either a Pose or a transformation matrix")
+
+        for grasp in self:
+            grasp.transform(transformation_matrix)
+
+    def copy(self) -> "GraspList":
+        return deepcopy(self)
+
+
 class Grasp2DList(GraspList):
     def __init__(self, grasps: List[Grasp2D] = []) -> None:
         super().__init__(grasps=grasps)
@@ -47,6 +76,35 @@ class Grasp2DList(GraspList):
 
     def scale(self, scale_factor: float):
         [g.scale(scale_factor) for g in self]
+
+
+class Grasp3DList(GraspList):
+    def __init__(self, grasps: List[Grasp3D] = []) -> None:
+        super().__init__(grasps=grasps)
+
+    def nms(self, translation_threshold, rotation_threshold):
+        # sort grasps
+        self.sort()
+
+        suppressed = np.zeros(len(self), dtype=bool)
+        for gi, grasp in enumerate(self):
+
+            if suppressed[gi]:
+                continue
+
+            for gj in range(gi+1, len(self)):
+                # compute difference
+                gi_pose = Pose.from_transformation_matrix(grasp.transformation_matrix)
+                gj_pose = Pose.from_transformation_matrix(self[gj].transformation_matrix)
+
+                diff_trans = difference(gi_pose, gj_pose, difference_type=DifferenceType.EUCLIDEAN)
+                diff_rot = difference(gi_pose, gj_pose, difference_type=DifferenceType.ROTATION)
+
+                if diff_trans['error'] < translation_threshold and diff_rot['error'] < rotation_threshold:
+                    suppressed[gj] = True
+
+        return suppressed
+
 
 class RectangleGraspList(Grasp2DList):
     def __init__(self, grasps: List[RectangleGrasp] = []) -> None:
@@ -86,6 +144,14 @@ class RectangleGraspList(Grasp2DList):
             with open(str(file_path), 'rb') as f:
                 grasps = pickle.loads(f.read().replace(b'grasp_benchmark',b'nicr_grasping'))
         return cls(grasps)
+
+    @classmethod
+    def load_from_mira_json(cls, json_object: dict):
+        grasps = [
+            RectangleGrasp.from_mira_json(grasp_json) for grasp_json in json_object
+        ]
+        obj = cls(grasps)
+        return obj
 
     def iou(self, grasp: RectangleGrasp) -> np.ndarray:
         """Function for compupting IoU of grasp against this list of grasps.
@@ -163,3 +229,16 @@ class RectangleGraspList(Grasp2DList):
             labels = gr.draw_label(labels, mode=mode)
 
         return labels
+
+
+class ParallelGripperGrasp3DList(Grasp3DList):
+    def __init__(self, grasps: List[ParallelGripperGrasp3D] = []) -> None:
+        super().__init__(grasps)
+
+    @classmethod
+    def from_mira_json(cls, json_object: dict):
+        grasps = [
+            ParallelGripperGrasp3D.from_mira_json(grasp_json) for grasp_json in json_object
+        ]
+        obj = cls(grasps)
+        return obj

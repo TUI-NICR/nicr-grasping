@@ -1,5 +1,5 @@
 import logging
-import importlib
+import importlib.util
 
 from .version import __version__
 

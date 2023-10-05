@@ -1,7 +1,7 @@
 import pytest
 import numpy as np
 from nicr_grasping.datatypes.grasp import RectangleGrasp, RectangleGraspList, Grasp3D
-from nicr_grasping.datatypes.grasp.grasp_3d import PrallelGripperGrasp3D
+from nicr_grasping.datatypes.grasp.grasp_3d import ParallelGripperGrasp3D
 from nicr_grasping.datatypes.intrinsics import PinholeCameraIntrinsic
 
 @pytest.fixture

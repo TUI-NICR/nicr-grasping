@@ -34,3 +34,5 @@ if GRASPNET_INSTALLED:
 
 if GRASP_DETECTION_INSTALLED:
     from .cornell import *
+
+from .dexnet import *
