@@ -1,7 +1,8 @@
 import abc
 import enum
 import os
-from typing import Dict, List, Tuple
+from typing import Dict, List, Any, Union
+import numpy as np
 import multiprocessing as mp
 import tqdm
 import json
@@ -15,17 +16,20 @@ from ...datatypes.grasp.grasp_2d import RectangleGraspDrawingMode
 from .. import SPLIT_DEFINITIONS
 from ..split_generation import SplitGenerator
 
-#TODO: Write comments for abstact methods on how to fill them. Used in documentation.
+# TODO: Write comments for abstact methods on how to fill them. Used in documentation.
+
 
 class ConversionMode(enum.Enum):
     MULTIGRASP_2D = 0
     SINGLEGRASP_2D = 1
 
+
 class DatasetInterface(abc.ABC):
     DATASET_NAME = ''
+
     def __init__(self,
-                 root_dir : str,
-                 dest_dir : str) -> None:
+                 root_dir: str,
+                 dest_dir: str) -> None:
         self._root_dir = root_dir
         self._dest_dir = dest_dir
 
@@ -34,20 +38,21 @@ class DatasetInterface(abc.ABC):
     def get_dest_dir(self) -> str:
         return os.path.join(self._dest_dir, self.DATASET_NAME)
 
-    def sample_id_to_string(self, sample_id: int):
+    def sample_id_to_string(self, sample_id: int) -> str:
         return str(sample_id).rjust(len(str(len(self))), '0')
 
     def save_2d_grasp_labels(self,
-                             grasp_labels: "numpy.ndarray",
+                             grasp_labels: List[Union[np.ndarray, None]],
                              dest_dir: str,
-                             sample_idx_str: str):
+                             sample_idx_str: str) -> None:
         for label, name in zip(grasp_labels, ['quality', 'angle', 'width']):
-            # label = grasp_labels[:, :, label_idx]
+            if label is None:
+                continue
             sparse_matrix = sp.coo_matrix(label.squeeze())
             sp.save_npz(os.path.join(dest_dir, 'grasp_labels', sample_idx_str + f'_{name}'), sparse_matrix)
 
     @abc.abstractmethod
-    def _prepare_destination_directories(self):
+    def _prepare_destination_directories(self) -> None:
         """Create directories where samples are being saved to.
         One directory for every modality and for grasp labels.
         """
@@ -66,7 +71,6 @@ class DatasetInterface(abc.ABC):
 
         self._prepare_destination_directories()
 
-
         dest_dir = self.get_dest_dir()
         if mode == ConversionMode.MULTIGRASP_2D:
             args = [(sample_idx, sample, dest_dir, draw_mode) for sample_idx, sample in enumerate(self)]
@@ -77,12 +81,12 @@ class DatasetInterface(abc.ABC):
         elif mode == ConversionMode.SINGLEGRASP_2D:
             raise NotImplementedError()
 
-        self.write_metadata(conversion_mode = mode, draw_mode = draw_mode)
+        self.write_metadata(conversion_mode=mode, draw_mode=draw_mode)
         self.generate_splits()
 
         return
 
-    def write_metadata(self, **kwargs) -> None:
+    def write_metadata(self, **kwargs: Any) -> None:
         metadata = {
             'num_total_samples': len(self),
             'conversion_date': str(datetime.now()),
@@ -95,10 +99,10 @@ class DatasetInterface(abc.ABC):
         with open(os.path.join(self.get_dest_dir(), 'metadata.json'), 'w') as f:
             json.dump(metadata, f)
 
-    def generate_splits(self):
+    def generate_splits(self) -> None:
         split_params = SPLIT_DEFINITIONS[self.DATASET_NAME]
         split_generator = SplitGenerator(
-            self._dest_root, **split_params
+            self._dest_root, **split_params  # type: ignore
         )
 
         split_generator.generate_splits()
@@ -108,20 +112,24 @@ class DatasetInterface(abc.ABC):
         pass
 
     @abc.abstractmethod
-    def _convert(self, args) -> None:
+    def _convert(self, args: tuple) -> None:
         pass
 
     @abc.abstractmethod
-    def _collect_samples(self):
+    def _collect_samples(self) -> None:
         pass
 
     @abc.abstractmethod
-    def __len__(self):
+    def __len__(self) -> int:
         raise NotImplementedError
 
     @abc.abstractmethod
-    def __getitem__(self, idx) -> Dict[str, str]:
+    def __getitem__(self, idx: int) -> Dict[str, str]:
         pass
+
+    def __iter__(self) -> Any:
+        for idx in range(len(self)):
+            yield self[idx]
 
     # @abc.abstractmethod
     # def get_grasps(self, idx):

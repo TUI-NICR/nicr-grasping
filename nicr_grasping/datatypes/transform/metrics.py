@@ -1,3 +1,4 @@
+from typing import Any, Dict
 import enum
 
 import numpy as np
@@ -18,14 +19,14 @@ class SymmetryType(enum.Enum):
     FLIP = 3
 
 
-def _diff_euclidean(pose1: Pose, pose2: Pose, **kwargs):
+def _diff_euclidean(pose1: Pose, pose2: Pose, **kwargs: Any) -> Dict[str, float]:
     res = {
         'error': np.linalg.norm(pose1.position - pose2.position)
     }
-    return res
+    return res  # type: ignore
 
 
-def _diff_deg5cm5(pose1: Pose, pose2: Pose, **kwargs):
+def _diff_deg5cm5(pose1: Pose, pose2: Pose, **kwargs: Any) -> Dict[str, bool]:
     rot = _diff_rotation(pose1, pose2)
     trans = _diff_euclidean(pose1, pose2)
     if rot['error'] < 5 and trans['error'] < 0.05:
@@ -38,7 +39,7 @@ def _diff_deg5cm5(pose1: Pose, pose2: Pose, **kwargs):
         }
 
 
-def _diff_rotation(pose1: Pose, pose2: Pose, symmetry: SymmetryType = SymmetryType.NONE, **kwargs) -> dict:
+def _diff_rotation(pose1: Pose, pose2: Pose, symmetry: SymmetryType = SymmetryType.NONE, **kwargs: Any) -> Dict[str, float]:
     if symmetry == SymmetryType.NONE:
         trans_diff = pose1.inverse().transformation_matrix @ pose2.transformation_matrix
         rot_diff_matrix = trans_diff[:3, :3]
@@ -48,7 +49,7 @@ def _diff_rotation(pose1: Pose, pose2: Pose, symmetry: SymmetryType = SymmetryTy
             trace = 3
         elif trace < -1:
             trace = -1
-        cos_angle = (rot_diff_matrix.trace() - 1) / 2
+        cos_angle = (trace - 1) / 2
         cos_angle = np.clip(cos_angle, -1, 1)
         angle = np.arccos(cos_angle)
 
@@ -117,7 +118,7 @@ def _diff_rotation(pose1: Pose, pose2: Pose, symmetry: SymmetryType = SymmetryTy
 
 
 def difference(pose1: Pose, pose2: Pose,
-               difference_type: DifferenceType = DifferenceType.EUCLIDEAN, **kwargs) -> dict:
+               difference_type: DifferenceType = DifferenceType.EUCLIDEAN, **kwargs: Any) -> Dict[str, Any]:
     if difference_type == DifferenceType.EUCLIDEAN:
         return _diff_euclidean(pose1, pose2, **kwargs)
     elif difference_type == DifferenceType.DEG5CM5:

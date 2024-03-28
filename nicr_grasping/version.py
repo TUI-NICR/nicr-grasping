@@ -1,12 +1,13 @@
 # -*- coding: utf-8 -*-
+from typing import Tuple
 
 _VERSION_MAJOR = 0
-_VERSION_MINOR = 1
+_VERSION_MINOR = 2
 _VERSION_MICRO = 0
 _VERSION_SUFFIX = ""
 
 
-def _get_version(with_suffix=False):    # pragma no cover
+def _get_version(with_suffix: bool = False) -> Tuple:    # pragma no cover
     """Private function to determine version"""
     if with_suffix:
         return (_VERSION_MAJOR,

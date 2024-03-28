@@ -135,6 +135,10 @@ class ParallelJawPtGrasp3D(PointGrasp):
         self.grasp_id_ = grasp_id
         self.max_grasp_depth = max_grasp_depth
 
+    def __str__(self):
+        return 'ParallelJawPtGrasp3D at ' + str(self.center_) + ' with axis ' + str(self.axis_) + ' and width ' + str(
+            self.max_grasp_width_) + ' and angle ' + str(self.approach_angle_) + ' and jaw width ' + str(self.jaw_width_) + ' and min width ' + str(self.min_grasp_width_) + ' and frame ' + str(self.frame_) + ' and id ' + str(self.grasp_id_) + ' and max depth ' + str(self.max_grasp_depth)
+
     @property
     def center(self):
         """ :obj:`numpy.ndarray` : 3-vector specifying the center of the jaws """

@@ -1,3 +1,5 @@
+from typing import Union, Dict
+
 import numpy as np
 from scipy.spatial.transform import Rotation as R
 
@@ -5,39 +7,41 @@ from ...utils.io import mira_json_to_pose
 
 
 class Pose:
-    def __init__(self, position: np.ndarray = np.zeros((3,)), rotation: np.ndarray = np.eye(3)):
+    def __init__(self,
+                 position: np.ndarray = np.zeros((3,)),
+                 rotation: np.ndarray = np.eye(3)) -> None:
         self._position = position
         self._rotation = rotation
 
     @classmethod
-    def from_transformation_matrix(cls, transformation_matrix: np.ndarray):
+    def from_transformation_matrix(cls, transformation_matrix: np.ndarray) -> "Pose":
         rotation = transformation_matrix[:3, :3]
         position = transformation_matrix[:3, 3]
         return cls(position, rotation)
 
     @property
-    def position(self):
+    def position(self) -> np.ndarray:
         return self._position
 
     @property
-    def rotation(self):
+    def rotation(self) -> np.ndarray:
         return self._rotation
 
     @property
-    def transformation_matrix(self):
+    def transformation_matrix(self) -> np.ndarray:
         res = np.eye(4)
         res[:3, :3] = self._rotation
         res[:3, 3] = self._position
 
         return res
 
-    def normalize_rotation(self):
+    def normalize_rotation(self) -> None:
         # https://github.com/wenbowen123/BundleTrack/blob/master/scripts/benchmark.py#L59
         for i in range(3):
-            norm = np.linalg.norm(self.rotation[:,i])
-            self.rotation[:,i] /= norm
+            norm = np.linalg.norm(self.rotation[:, i])
+            self.rotation[:, i] /= norm
 
-    def transform(self, transform):
+    def transform(self, transform: Union[np.ndarray, 'Pose']) -> 'Pose':
         mat = np.eye(4)
         if isinstance(transform, Pose):
             mat = transform.transformation_matrix
@@ -49,9 +53,9 @@ class Pose:
         return Pose.from_transformation_matrix(mat @ self.transformation_matrix)
 
     @classmethod
-    def from_mira_json(cls, json_object: dict):
+    def from_mira_json(cls, json_object: Dict) -> "Pose":
         position, orientation = mira_json_to_pose(json_object)
         return cls(position, orientation)
 
-    def inverse(self):
+    def inverse(self) -> "Pose":
         return Pose.from_transformation_matrix(np.linalg.inv(self.transformation_matrix))

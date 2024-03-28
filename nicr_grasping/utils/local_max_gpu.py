@@ -1,4 +1,5 @@
 import numpy as np
+from typing import Union
 
 import torch
 from torch.nn import MaxPool2d
@@ -12,15 +13,16 @@ if torch.cuda.is_available():
 else:
     DEVICE = torch.device("cpu")
 
-def euclid(c1, c2):
-    return math.sqrt((c1[0]-c2[0])**2 + (c1[1]-c2[1])**2)
 
-def peak_local_max_2d(img, min_distance=10, threshold_abs=0.1, num_peaks=5, device="cpu"):
+def peak_local_max_2d(img: Union[np.ndarray, torch.Tensor],
+                      min_distance: int = 10,
+                      threshold_abs: float = 0.1,
+                      num_peaks: int = 5, device: Union[torch.device, str] = "cpu") -> np.ndarray:
     if not CUDA_AVAILABLE:
         print("No GPU availalbe!")
-        device="cpu"
+        device = "cpu"
     # tensor from image, add batch and channel dimension
-    if type(img) != torch.Tensor:
+    if not isinstance(img, torch.Tensor):
         img_gpu = torch.from_numpy(img[np.newaxis, ...]).to(device)
     else:
         img_gpu = img.to(device)
@@ -29,11 +31,11 @@ def peak_local_max_2d(img, min_distance=10, threshold_abs=0.1, num_peaks=5, devi
             img_gpu = img_gpu.unsqueeze(0)
 
     # check data range 0.0...1.0
-    #assert img_gpu.min() >= 0.0 and img_gpu.max() <= 1.0, print("peak_local_max: img not in range [0.0,1.0]")
+    # assert img_gpu.min() >= 0.0 and img_gpu.max() <= 1.0, print("peak_local_max: img not in range [0.0,1.0]")
 
     # init MaxPool2d layer
     kernel_size = 2*min_distance
-    #assert kernel_size <= img_gpu.shape[2] and kernel_size <= img_gpu.shape[3]
+    # assert kernel_size <= img_gpu.shape[2] and kernel_size <= img_gpu.shape[3]
     pool = MaxPool2d(kernel_size=kernel_size, stride=kernel_size, padding=0, return_indices=True)
 
     # padding
@@ -56,7 +58,7 @@ def peak_local_max_2d(img, min_distance=10, threshold_abs=0.1, num_peaks=5, devi
     sorted_indices = sorted_indices[threshold_mask]
 
     if len(sorted_indices) == 0:
-        return []
+        return np.array([])
     else:
         img_indices = np.array([img_indices[0].flatten()[sorted_indices], img_indices[1].flatten()[sorted_indices]])
         img_indices = img_indices.T

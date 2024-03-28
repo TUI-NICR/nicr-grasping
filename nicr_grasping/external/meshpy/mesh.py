@@ -11,6 +11,7 @@ import os
 import random
 from subprocess import Popen
 import sys
+import logging
 
 import numpy as np
 import scipy.spatial as ss
@@ -948,7 +949,7 @@ class Mesh3D(object):
             transformation from object to table basis (z-axis upward) specifying the orientation of the mesh
         eps : float
             numeric tolerance in cone projection solver
-        
+
         Returns
         -------
         :obj:`StablePose`
@@ -984,7 +985,7 @@ class Mesh3D(object):
         v_cm = v_cm[:2]
 
         # compute which face the vertex will topple onto
-        # break loop when topple tri is found        
+        # break loop when topple tri is found
         topple_tri = None
         neighboring_tris = self.face_dag_.vertex_to_tri[vertex_ind]
         random.shuffle(neighboring_tris)
@@ -1072,7 +1073,7 @@ class Mesh3D(object):
 
     def merge(self, other_mesh):
         """ Combines this mesh with another mesh.
-        
+
         Parameters
         ----------
         other_mesh : :obj:`Mesh3D`
@@ -1508,7 +1509,7 @@ class Mesh3D(object):
         """ Computes a directed acyclic graph (DAG) specifying the
         toppling structure of the mesh faces by:
             1) Computing the mesh convex hull
-            2) Creating maps from vertices and edges to the triangles that share them 
+            2) Creating maps from vertices and edges to the triangles that share them
             3) Connecting each triangle in the convex hull to the face it will topple to, if landed on
         Modifies the class variable self.face_dag_.
         """
@@ -1679,7 +1680,7 @@ class Mesh3D(object):
         Attributes
         ----------
         mesh : :obj:`Mesh3D`
-            the 3D triangular mesh that the DAG refers to (usually the convex hull) 
+            the 3D triangular mesh that the DAG refers to (usually the convex hull)
         nodes : :obj:`dict` mapping 3-`tuple` of integers (triangles) to :obj:`Mesh3D._GraphVertex`
             the nodes in the DAG
         vertex_to_tri : :obj:`dict` mapping :obj:`int` (vertex indices) to 3-`tuple` of integers (triangles)
@@ -1876,7 +1877,7 @@ class Mesh3D(object):
         Returns
         -------
         :obj:`Mesh3D._Segment`
-            best segment to check        
+            best segment to check
         """
         # find the shared vertex and compute the midline between the segments
         if np.allclose(s1.p1, s2.p1):

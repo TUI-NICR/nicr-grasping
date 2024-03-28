@@ -1,57 +1,90 @@
 import os
 import tqdm
-import cv2
-import matplotlib.pyplot as plt
 
-from typing import Optional
+import torch
+
+from functools import partialmethod
+
+from typing import Optional, List, Any, Union, Dict
 import numpy as np
 
 from ...datatypes.grasp_conversion import CONVERTER_REGISTRY
 from ...utils.postprocessing import convert_model_output_to_grasps
+from ...utils.paths import graspnet_dataset_path
 
-from graspnetAPI.grasp import RectGraspGroup
+from graspnetAPI.grasp import RectGraspGroup, GraspGroup
 from graspnetAPI.graspnet_eval import GraspNetEval, GraspNet
 from graspnetAPI.utils.utils import batch_center_area_depth
 
+
+class TQDMPatch:
+    def __init__(self) -> None:
+        self._original_tqdm_constructor = None
+
+    def __enter__(self) -> None:
+        self._original_tqdm_constructor = tqdm.tqdm.__init__
+        tqdm.tqdm.__init__ = partialmethod(tqdm.tqdm.__init__, disable=True)
+
+    def __exit__(self, *args: Any) -> None:
+        tqdm.tqdm.__init__ = self._original_tqdm_constructor
+
+
+def get_graspnet_instance(**kwargs: Any) -> GraspNet:
+    with TQDMPatch():
+        root = kwargs.pop('root', graspnet_dataset_path())
+        graspnet = GraspNet(root=root, **kwargs)
+
+    return graspnet
+
+
+def get_graspnet_eval_instance(**kwargs: Any) -> GraspNetEval:
+    with TQDMPatch():
+        root = kwargs.pop('root', graspnet_dataset_path())
+        graspnet_eval = GraspNetEval(root=root, **kwargs)
+
+    return graspnet_eval
+
+
 def eval_on_graspnet(graspnet_root: str,
                      prediction_folder: str,
-                     camera: str='kinect',
-                     split: str='test',
-                     num_jobs: int=24):
+                     camera: str = 'kinect',
+                     split: str = 'test',
+                     num_jobs: int = 24) -> Dict[str, float]:
 
-    ge_k = GraspNetEval(root = graspnet_root, camera = camera, split = split)
+    ge_k = GraspNetEval(root=graspnet_root, camera=camera, split=split)
 
     eval_res = {}
 
     if split == 'test_seen':
-        res, ap = ge_k.eval_seen(prediction_folder, proc = num_jobs)
+        res, ap = ge_k.eval_seen(prediction_folder, proc=num_jobs)
         eval_res['AP-seen'] = ap
     elif split == 'test_similar':
-        res, ap = ge_k.eval_similar(prediction_folder, proc = num_jobs)
+        res, ap = ge_k.eval_similar(prediction_folder, proc=num_jobs)
         eval_res['AP-similar'] = ap
     elif split == 'test_novel':
-        res, ap = ge_k.eval_novel(prediction_folder, proc = num_jobs)
+        res, ap = ge_k.eval_novel(prediction_folder, proc=num_jobs)
         eval_res['AP-novel'] = ap
     else:
-        res, ap = ge_k.eval_all(prediction_folder, proc = num_jobs)
+        res, ap = ge_k.eval_all(prediction_folder, proc=num_jobs)
         eval_res['AP-seen'] = ap[1]
         eval_res['AP-similar'] = ap[2]
         eval_res['AP-novel'] = ap[3]
 
     return eval_res
 
+
 def gt_predictor(graspnet_eval: GraspNetEval,
                  scene_id: int, anno_id: int,
-                 camera:str = 'kinect',
-                 grasp_labels = None,
-                 collision_labels = None):
+                 camera: str = 'kinect',
+                 grasp_labels: Union[GraspGroup, None] = None,
+                 collision_labels: Union[np.ndarray, None] = None) -> GraspGroup:
     """Fuction acting as predictor using the ground truth labels.
     Usefull for sanity checking the labels.
     """
     depth = graspnet_eval.loadDepth(scene_id, camera, anno_id)
 
     grasps_6d = graspnet_eval.loadGrasp(scene_id, anno_id, format='6d', camera=camera, grasp_labels=grasp_labels, collision_labels=collision_labels,
-                                        fric_coef_thresh = 1.0)
+                                        fric_coef_thresh=1.0)
 
     # do this first because otherwise to_rect_grasp_group will filter through this check
     # and we lose corresponding grasps otherwise
@@ -75,16 +108,11 @@ def gt_predictor(graspnet_eval: GraspNetEval,
 
     return grasp_backprojection
 
-    ids = graspnet_eval.getDataIds([scene_id])
-    grasps = RectGraspGroup().from_npy(graspnet_eval.rectLabelPath[ids[anno_id]])
-
-
-    return grasps.to_grasp_group(camera, depth, depth_method=batch_center_area_depth)
 
 def gt_predictor_base(graspnet_eval: GraspNetEval,
-                 scene_id: int, anno_id: int,
-                 camera:str = 'kinect',
-                 gt_folder: Optional[str]=None):
+                      scene_id: int, anno_id: int,
+                      camera: str = 'kinect',
+                      gt_folder: Optional[str] = None) -> GraspGroup:
     """Fuction acting as predictor using the ground truth labels.
     Usefull for sanity checking the labels.
 
@@ -133,20 +161,17 @@ def gt_predictor_base(graspnet_eval: GraspNetEval,
 def run_predictor(predictor: "torch.engine.DefaultPredictor",
                   graspnet: GraspNet,
                   savedir: str,
-                  scene_ids = None,
-                  debug: bool=False):
-
-    import torch
+                  scene_ids: Optional[List] = None,
+                  debug: bool = False) -> None:
 
     if scene_ids is None:
         scene_ids = graspnet.sceneIds
 
     with torch.no_grad():
-        for scene_idx, scene_id in enumerate(tqdm.tqdm(scene_ids, total=len(scene_ids), desc='Iterating scenes')):
-            scene_eval = []
+        for scene_id in tqdm.tqdm(scene_ids, total=len(scene_ids), desc='Iterating scenes'):
             for ann_id in tqdm.tqdm(range(256), total=256, desc='Iterating samples', leave=False):
-                depth_img = graspnet.loadDepth(sceneId = scene_id, camera = graspnet.camera, annId = ann_id)
-                rgb_img = graspnet.loadRGB(sceneId = scene_id, camera = graspnet.camera, annId = ann_id)
+                depth_img = graspnet.loadDepth(sceneId=scene_id, camera=graspnet.camera, annId=ann_id)
+                rgb_img = graspnet.loadRGB(sceneId=scene_id, camera=graspnet.camera, annId=ann_id)
 
                 masks = graspnet.loadMask(scene_id, graspnet.camera, ann_id)
 
@@ -158,15 +183,15 @@ def run_predictor(predictor: "torch.engine.DefaultPredictor",
                 workspace_mask = workspace_mask.astype(np.uint8)
 
                 inp_depth = torch.from_numpy(np.expand_dims(depth_img.copy(), 0).astype(np.float32)).cuda()
-                inp_rgb =  torch.from_numpy(rgb_img.copy().astype(np.float32)).cuda()
-                inp_rgb = inp_rgb.permute(2,0,1)
+                inp_rgb = torch.from_numpy(rgb_img.copy().astype(np.float32)).cuda()
+                inp_rgb = inp_rgb.permute(2, 0, 1)
 
                 # inp_depth *= 0.001
                 inp_depth -= inp_depth.min()
                 inp_depth /= (inp_depth.max())
 
                 pred = predictor.predict([{'image': {'depth': inp_depth, 'color': inp_rgb}}])
-                maps = [pred[0]['pos'], pred[0]['ang'], pred[0]['width']]
+                maps = (pred[0]['pos'], pred[0]['ang'], pred[0]['width'])
 
                 quality, angle, width = maps
                 quality *= workspace_mask

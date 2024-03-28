@@ -1,4 +1,4 @@
-from typing import List
+from typing import List, Any, Union, Tuple, Dict
 import torch
 import numpy as np
 
@@ -7,11 +7,15 @@ from ..utils.local_max_gpu import peak_local_max_2d as peak_local_max_torch
 
 from ..datatypes.grasp import RectangleGrasp, RectangleGraspList
 
-def peak_local_max( quality_map : torch.Tensor,
-                    num_peaks   : int = -1,
-                    min_distance : int = 20,
-                    threshold_abs  : float = 0.2,
-                    loc_max_version : str = "skimage_cpu") -> np.ndarray:
+ModelOutPutSinCos = Tuple[Any, Any, Any, Any]
+ModelOutAngle = Tuple[Any, Any, Any]
+
+
+def peak_local_max(quality_map: torch.Tensor,
+                   num_peaks: int = -1,
+                   min_distance: int = 20,
+                   threshold_abs: float = 0.2,
+                   loc_max_version: str = "skimage_cpu") -> np.ndarray:
 
     if loc_max_version == "skimage_cpu":
         if not isinstance(quality_map, np.ndarray):
@@ -36,11 +40,12 @@ def peak_local_max( quality_map : torch.Tensor,
 
     return local_max
 
-def convert_ggcnn_output_to_grasps(model_output : List[np.ndarray],
-                                   num_grasps   : int = -1,
-                                   min_distance : int = 20,
-                                   min_quality  : float = 0.2,
-                                   loc_max_version : str = "skimage_cpu") -> List[RectangleGrasp]:
+
+def convert_ggcnn_output_to_grasps(model_output: List[np.ndarray],
+                                   num_grasps: int = -1,
+                                   min_distance: int = 20,
+                                   min_quality: float = 0.2,
+                                   loc_max_version: str = "skimage_cpu") -> RectangleGraspList:
     # invert angle
     if len(model_output) == 3:
         quality_map, angle_map, width_map = model_output
@@ -53,20 +58,19 @@ def convert_ggcnn_output_to_grasps(model_output : List[np.ndarray],
     sin_map = np.sin(angle_map)
     # width_map *= 150
 
-    return convert_model_output_to_grasps([quality_map, cos_map, sin_map, width_map],
+    return convert_model_output_to_grasps((quality_map, cos_map, sin_map, width_map),
                                           num_grasps=num_grasps,
                                           min_distance=min_distance,
                                           min_quality=min_quality,
                                           loc_max_version=loc_max_version)
 
 
-
-def convert_model_output_to_grasps(model_output : List[np.ndarray],
-                                   num_grasps   : int = -1,
-                                   min_distance : int = 20,
-                                   min_quality  : float = 0.2,
-                                   loc_max_version : str = "skimage_cpu",
-                                   additional_maps = None) -> List[RectangleGrasp]:
+def convert_model_output_to_grasps(model_output: Union[ModelOutPutSinCos, ModelOutAngle],
+                                   num_grasps: int = -1,
+                                   min_distance: int = 20,
+                                   min_quality: float = 0.2,
+                                   loc_max_version: str = "skimage_cpu",
+                                   additional_maps: Union[Dict[str, np.ndarray], None] = None) -> RectangleGraspList:
     if len(model_output) == 3:
         quality_map, angle_map, width_map = model_output
     elif len(model_output) == 4:
@@ -77,14 +81,13 @@ def convert_model_output_to_grasps(model_output : List[np.ndarray],
     angle_map = angle_map.squeeze()
     width_map = width_map.squeeze()
 
-    grasps = []
+    grasps = RectangleGraspList()
 
     if num_grasps != -1:
 
         local_max = peak_local_max(
             quality_map, min_distance=min_distance, threshold_abs=min_quality, num_peaks=num_grasps, loc_max_version=loc_max_version)
 
-        grasps = []
         for grasp_point_array in local_max:
             grasp_point = tuple(grasp_point_array)
 
@@ -102,7 +105,6 @@ def convert_model_output_to_grasps(model_output : List[np.ndarray],
             center = np.array(grasp_point)[::-1]
             center = center.reshape(-1, 2)
 
-
             # TODO: Creation of RectangleGrasp calls _compute_points which could be done on GPU. This would require a constructor for GraspLists which takes multiple sets of points.
             if isinstance(quality_map, torch.Tensor):
                 g = RectangleGrasp(quality=quality.cpu().numpy(), center=center, angle=grasp_angle.cpu().numpy(), width=width.cpu().numpy(),
@@ -115,9 +117,8 @@ def convert_model_output_to_grasps(model_output : List[np.ndarray],
     else:
         # grasp_positions = cv2.findNonZero(quality_map)
         quality_map[quality_map < min_quality] = 0
-        grasp_positions = np.array(np.nonzero(quality_map))#.transpose()
+        grasp_positions = np.array(np.nonzero(quality_map))  # .transpose()
 
-        grasps = []
         for grasp_point_array in grasp_positions:
             grasp_point = tuple(grasp_point_array)
 
@@ -138,7 +139,6 @@ def convert_model_output_to_grasps(model_output : List[np.ndarray],
             grasps.append(g)
 
     # sort grasps with highest quality one at the front
-    grasps = RectangleGraspList(grasps)
-    grasps.sort()
+    grasps.sort_by_quality()
 
     return grasps

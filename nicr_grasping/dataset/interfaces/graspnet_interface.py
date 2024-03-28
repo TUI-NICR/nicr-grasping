@@ -1,15 +1,10 @@
-from typing import Dict
+from typing import Dict, Any
 from graspnetAPI.graspnet import GraspNet
-import cv2
 import os
-import numpy as np
-import tqdm
-import multiprocessing as mp
-import scipy.sparse as sp
 
-from .interface_base import DatasetInterface, ConversionMode
+from .interface_base import DatasetInterface
 from ...datatypes.modalities.image import DepthImage, ColorImage
-from ...datatypes.grasp import RectangleGrasp, RectangleGraspList, RectangleGraspDrawingMode
+from ...datatypes.grasp import RectangleGraspList
 from ...datatypes.grasp_conversion import CONVERTER_REGISTRY
 
 from graspnetAPI.grasp import RectGraspGroup
@@ -17,7 +12,7 @@ from graspnetAPI.grasp import RectGraspGroup
 from typing import List
 
 
-def load_grasp_file(file_path : str):
+def load_grasp_file(file_path: str) -> RectangleGraspList:
     graspgroup = RectGraspGroup().from_npy(file_path)
     return CONVERTER_REGISTRY.convert(graspgroup, RectangleGraspList)
 
@@ -26,9 +21,9 @@ class GraspNetInterface(DatasetInterface):
     DATASET_NAME = 'graspnet'
 
     def __init__(self,
-                 root_dir : str,
-                 dest_dir : str,
-                 **kwargs) -> None:
+                 root_dir: str,
+                 dest_dir: str,
+                 **kwargs: Any) -> None:
         super().__init__(root_dir, dest_dir)
 
         self._camera = kwargs.get('camera', 'kinect')
@@ -42,13 +37,13 @@ class GraspNetInterface(DatasetInterface):
     def get_modalities(self) -> List[str]:
         return [ColorImage.MODALITY_NAME, DepthImage.MODALITY_NAME]
 
-    def _collect_samples(self):
+    def _collect_samples(self) -> None:
         return
 
-    def __len__(self):
+    def __len__(self) -> int:
         return len(self._graspnet_manager.rgbPath)
 
-    def __getitem__(self, idx) -> Dict[str, str]:
+    def __getitem__(self, idx: int) -> Dict[str, str]:
         res = {}
         res['grasp-file'] = self._graspnet_manager.rectLabelPath[idx]
         res['depth-file'] = self._graspnet_manager.depthPath[idx]
@@ -56,7 +51,7 @@ class GraspNetInterface(DatasetInterface):
         res['segmentation-file'] = self._graspnet_manager.segLabelPath[idx]
         return res
 
-    def _prepare_destination_directories(self):
+    def _prepare_destination_directories(self) -> None:
         """Create directories where samples are being saved to.
         One directory for every modality and for grasp labels.
         """
@@ -66,7 +61,7 @@ class GraspNetInterface(DatasetInterface):
         os.makedirs(os.path.join(dest_dir, 'grasp_labels'))
         os.makedirs(os.path.join(dest_dir, 'grasp_lists'))
 
-    def _convert(self, args):
+    def _convert(self, args: tuple) -> None:
         sample_idx, sample, dest_dir, draw_mode = args
         color = ColorImage.from_file(sample['color-file'])
         depth = DepthImage.from_file(sample['depth-file'])
@@ -77,7 +72,7 @@ class GraspNetInterface(DatasetInterface):
         # sort grasps lowest to highest
         # in case of different qualities this assures
         # high quality grasps overwrite lower ones
-        grasps.sort(reverse=True)
+        grasps.sort_by_quality(reverse=True)
 
         grasps.save(os.path.join(dest_dir, 'grasp_lists', sample_idx_str + '.pkl'))
 

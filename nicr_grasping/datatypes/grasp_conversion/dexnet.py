@@ -1,5 +1,5 @@
 import numpy as np
-from scipy.spatial.transform import Rotation as R
+from scipy.spatial.transform import Rotation
 
 from . import logger
 
@@ -11,8 +11,13 @@ from . import CONVERTER_REGISTRY
 
 PRINTED_WARNING = False
 
-def matrix_to_dexnet_params(matrix):
+
+def matrix_to_dexnet_params(matrix: np.ndarray) -> tuple[np.ndarray, float]:
     # code taken from graspnetAPI
+    # we orthonormalize the matrix through scipy
+    # otherwise we might encounter numerical issues
+    # and invalid parameters for arccos
+    matrix = Rotation.from_matrix(matrix).as_matrix()
 
     approach = matrix[:, 0]
     binormal = matrix[:, 1]
@@ -32,7 +37,7 @@ def matrix_to_dexnet_params(matrix):
     return binormal, angle
 
 
-def parallelgrippergrasp3d_to_dexnetgrasp(grasp: ParallelGripperGrasp3D):
+def parallelgrippergrasp3d_to_dexnetgrasp(grasp: ParallelGripperGrasp3D) -> ParallelJawPtGrasp3D:
 
     global PRINTED_WARNING
     if not PRINTED_WARNING:
@@ -41,7 +46,7 @@ def parallelgrippergrasp3d_to_dexnetgrasp(grasp: ParallelGripperGrasp3D):
 
     center = grasp.position
 
-    rotation_fix = R.from_euler('xy', [90, -90], degrees=True).as_matrix()
+    rotation_fix = Rotation.from_euler('xy', [90, -90], degrees=True).as_matrix()
     grasp.orientation = grasp.orientation @ rotation_fix
 
     # center = np.array([0.02, 0, 0]).reshape([3, 1]) # gripper coordinate
@@ -51,9 +56,7 @@ def parallelgrippergrasp3d_to_dexnetgrasp(grasp: ParallelGripperGrasp3D):
     grasp_pose = grasp.transformation_matrix @ center_offset
     center = grasp_pose[:3, 3]
 
-    binormal = grasp.orientation[:, 1]
     width = grasp.width
-    approach_angle = 0
     depth = 0.02
     binormal, approach_angle = matrix_to_dexnet_params(grasp.orientation)
 
@@ -66,4 +69,3 @@ def parallelgrippergrasp3d_to_dexnetgrasp(grasp: ParallelGripperGrasp3D):
 
 
 CONVERTER_REGISTRY.register(ParallelGripperGrasp3D, ParallelJawPtGrasp3D, parallelgrippergrasp3d_to_dexnetgrasp)
-

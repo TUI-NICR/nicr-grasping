@@ -1,5 +1,6 @@
 import importlib
 from collections import defaultdict
+from typing import Dict, Callable, Type, TypeAlias, Any
 import logging
 from .. import logger as baselogger
 
@@ -9,17 +10,23 @@ logger = baselogger.getChild('conversion')
 
 __all__ = ['CONVERTER_REGISTRY']
 
+ConverterFunctionType: TypeAlias = Callable[[Any], Any]
+
 
 class ConverterRegistry:
-    CONVERSIONS = defaultdict(dict)
-    def __init__(self, logger) -> None:
+    CONVERSIONS: Dict[Type, Dict[Type, ConverterFunctionType]] = defaultdict(dict)
+
+    def __init__(self, logger: logging.Logger) -> None:
         self._logger = logger
 
-    def register(self, from_type, to_type, converter_func):
+    def register(self,
+                 from_type: Type, to_type: Type, converter_func: ConverterFunctionType) -> None:
         self._logger.info(f'Registered conversion from {from_type} to {to_type}')
         self.CONVERSIONS[from_type][to_type] = converter_func
 
-    def convert(self, obj, goal_type):
+    def convert(self,
+                obj: Any,
+                goal_type: Type) -> Any:
         from_type = type(obj)
         converters = self.CONVERSIONS[from_type]
         if goal_type not in converters:
@@ -27,7 +34,8 @@ class ConverterRegistry:
 
         return converters[goal_type](obj)
 
-CONVERTER_REGISTRY = ConverterRegistry(logger)
+
+CONVERTER_REGISTRY: ConverterRegistry = ConverterRegistry(logger)
 
 if GRASPNET_INSTALLED:
     from .graspnet import *

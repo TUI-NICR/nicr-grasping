@@ -11,7 +11,8 @@ from . import GRASPNET_INSTALLED
 # Conversion GraspNet -> GGCNN
 if GRASPNET_INSTALLED:
     from graspnetAPI.grasp import RectGrasp
-    def rectgrasp_to_grasprect(grasp : RectGrasp) -> GraspRectangle:
+
+    def rectgrasp_to_grasprect(grasp: RectGrasp) -> GraspRectangle:
         grasp = CONVERTER_REGISTRY.convert(grasp, RectangleGrasp)
         res = GraspRectangle(grasp.points)
 

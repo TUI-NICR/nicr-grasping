@@ -11,12 +11,17 @@ from shapely.affinity import translate, rotate
 from skimage.draw import polygon, polygon_perimeter, line
 from ...utils.draw import draw_gauss
 
-from typing import Any, List, Optional, Union
+from typing import Any, List, Optional, Union, Dict, TYPE_CHECKING, Type, TypeVar
+
+if TYPE_CHECKING:
+    from .grasp_3d import Grasp3D, ParallelGripperGrasp3D
 
 from .grasp_base import Grasp
 from ..rotation import Rotation2D
 
 from ..intrinsics import PinholeCameraIntrinsic
+
+__all__ = ['Grasp2D', 'RectangleGrasp', 'RectangleGraspDrawingMode', 'DepthLookupMethod']
 
 
 class RectangleGraspDrawingMode(enum.Enum):
@@ -37,10 +42,13 @@ class DepthLookupMethod(enum.Enum):
     CENTER_AREA = 1
 
 
+T = TypeVar('T', bound='Grasp2D')
+
+
 class Grasp2D(Grasp):
     def __init__(self,
-                 quality: float      = 0,
-                 center : np.ndarray = np.zeros((1, 2))):
+                 quality: float = 0,
+                 center: np.ndarray = np.zeros((1, 2))) -> None:
         """Grasprepresentation for 2D or rectangle grasps.
         In general a 2D grasp should define a center usually where the end effector frame will be located.
 
@@ -55,11 +63,14 @@ class Grasp2D(Grasp):
 
         assert len(center.shape) == 2
 
-        self._center  = center
+        self._center = center
         self._points = center
 
+    def __repr__(self) -> str:
+        return super().__repr__()
+
     @classmethod
-    def from_points(cls, points : np.ndarray):
+    def from_points(cls: Type[T], points: np.ndarray) -> T:
         obj = cls()
 
         obj._points = points
@@ -67,10 +78,15 @@ class Grasp2D(Grasp):
 
         return obj
 
+    @classmethod
+    def load(cls: Type[T], file_path: Union[Path, str]) -> T:
+        points = np.load(file_path)
+        return cls.from_points(points)
+
     def __eq__(self, __o: object) -> bool:
 
         if isinstance(__o, Grasp2D):
-            return np.isclose(self.points, __o.points).all() and super(Grasp2D, self).__eq__(__o)
+            return bool(np.isclose(self.points, __o.points).all()) and super(Grasp2D, self).__eq__(__o)
 
         return False
 
@@ -82,10 +98,10 @@ class Grasp2D(Grasp):
         return self._points
 
     @property
-    def center(self):
+    def center(self) -> np.ndarray:
         return self._points.mean(axis=0, keepdims=True)
 
-    def rotate(self, rotation: Union[Rotation2D, float]):
+    def rotate(self, rotation: Union[Rotation2D, float]) -> None:
         if not isinstance(rotation, Rotation2D):
             rotation = Rotation2D(angle_rad=rotation)
 
@@ -96,16 +112,16 @@ class Grasp2D(Grasp):
         c = self._center
         self._points = ((np.dot(R, (self.points - c).T)).T + c)
 
-    def scale(self, scale_factor: float):
+    def scale(self, scale_factor: float) -> None:
         self._points *= scale_factor
 
-    def translate(self, translation: np.ndarray):
+    def translate(self, translation: np.ndarray) -> None:
         self._points += translation
 
     def to_3d(self,
               depth_image: np.ndarray,
               intrinsic: PinholeCameraIntrinsic,
-              depth_lookup_method: DepthLookupMethod = DepthLookupMethod.CENTER_POINT):
+              depth_lookup_method: DepthLookupMethod = DepthLookupMethod.CENTER_POINT) -> 'Grasp3D':
         from .grasp_3d import Grasp3D
 
         # get depth value through specified method
@@ -122,11 +138,15 @@ class Grasp2D(Grasp):
 
         return Grasp3D(self.quality, points_3d.mean(axis=0, keepdims=True), rotation, points_3d)
 
-    def _compute_rotation_matrix(self, points_3d):
+    def _compute_rotation_matrix(self, points_3d: np.ndarray) -> np.ndarray:
         return np.eye(3)
 
-    def _depth_lookup_center(self, depth_image):
-        return depth_image[self.center.astype(int)[:, 0], self.center.astype(int)[:, 1]]
+    def _depth_lookup_center(self, depth_image: np.ndarray) -> float:
+        return depth_image[self.center.astype(int)[:, 0], self.center.astype(int)[:, 1]]  # type: ignore
+
+
+RectT = TypeVar('RectT', bound='RectangleGrasp')
+
 
 class RectangleGrasp(Grasp2D):
     def __init__(self,
@@ -135,7 +155,7 @@ class RectangleGrasp(Grasp2D):
                  width: float = 1,
                  angle: float = 0,
                  length: Optional[float] = None,
-                 additional_params = None):
+                 additional_params: Optional[Dict[str, Any]] = None):
         """Rectangle representation of a 2d grasp for parallel grippers.
 
         Parameters
@@ -153,18 +173,18 @@ class RectangleGrasp(Grasp2D):
         assert length != 0 and width != 0
 
         # if length is not defined choose default ratio
-        length: float = length if length is not None else width / 2
+        length = length or width / 2
 
         self._compute_points(angle, width, length)
 
         self._additional_params = additional_params
 
     @property
-    def width(self):
-        return np.linalg.norm(self._points[1] - self._points[2])
+    def width(self) -> float:
+        return np.linalg.norm(self._points[1] - self._points[2])  # type: ignore
 
     @width.setter
-    def width(self, value):
+    def width(self, value: float) -> None:
         assert value != 0, "Width may not be 0!"
         rotation = Rotation2D(angle_rad=self.angle)
         rotmat = rotation.to_mat()
@@ -176,13 +196,13 @@ class RectangleGrasp(Grasp2D):
         # scale width
         self._points[:, 0] *= value / self.width
 
-        #rotate back
+        # rotate back
         self._points = np.dot(self._points, rotmat)
 
         self._points += center
 
     @property
-    def angle(self):
+    def angle(self) -> float:
         """Compute angle based on rectangle edges.
         It is important to note that angle is given for image coordinate system.
         This is why the arctan is take from (-y, x) as the arctan works in normal coordinate system.
@@ -193,14 +213,14 @@ class RectangleGrasp(Grasp2D):
             The angle of the grasp in image coordinate system.
         """
         diff = self._points[1] - self._points[2]
-        return np.arctan2(-diff[1], diff[0])
+        return np.arctan2(-diff[1], diff[0])  # type: ignore
 
     @property
     def length(self) -> float:
-        return np.linalg.norm(self._points[0] - self._points[1])
+        return np.linalg.norm(self._points[0] - self._points[1])  # type: ignore
 
     @length.setter
-    def length(self, value : float) -> None:
+    def length(self, value: float) -> None:
         assert value != 0, "Length may not be 0!"
         rotation = Rotation2D(angle_rad=self.angle)
         rotmat = rotation.to_mat()
@@ -223,9 +243,9 @@ class RectangleGrasp(Grasp2D):
         return Polygon(self.points)
 
     def _compute_points(self,
-                        angle,
-                        width,
-                        length) -> np.ndarray:
+                        angle: float,
+                        width: float,
+                        length: float) -> None:
         """Computes keypoints of rectengular representation (edges).
 
         Returns
@@ -249,17 +269,12 @@ class RectangleGrasp(Grasp2D):
         self._points += self._center
         self.rotate(angle)
 
-    def save(self, file_path: Union[Path, str]):
+    def save(self, file_path: Union[Path, str]) -> None:
         np.save(file_path, self.points)
 
-    @classmethod
-    def load_from_file(cls, file_path: Union[Path, str]):
-        points = np.load(file_path)
-        return cls.from_points(points)
-
     def draw_label(self,
-                   images : List[np.ndarray],
-                   mode : RectangleGraspDrawingMode = RectangleGraspDrawingMode.INNER_RECTANGLE) -> List[np.ndarray]:
+                   images: List[np.ndarray],
+                   mode: RectangleGraspDrawingMode = RectangleGraspDrawingMode.INNER_RECTANGLE) -> List[np.ndarray]:
 
         if mode == RectangleGraspDrawingMode.INNER_RECTANGLE:
             return self._draw_label_inner_rectangle(images, 3)
@@ -292,13 +307,13 @@ class RectangleGrasp(Grasp2D):
             images[0][tuple(center)] = self.quality
             images[1][tuple(center)] = self.angle
             images[2][tuple(center)] = self.width
-        except:
+        except IndexError:
             pass
 
         return images
 
     def _draw_label_inner_rectangle(self, images: List[np.ndarray],
-                                    fraction: int,
+                                    fraction: float,
                                     draw_margin: bool = False,
                                     full_margin: bool = False) -> List[np.ndarray]:
         g_copy = self.copy()
@@ -379,22 +394,22 @@ class RectangleGrasp(Grasp2D):
 
         return images
 
-    def plot(self, image : np.ndarray, **kwargs) -> np.ndarray:
+    def plot(self, image: np.ndarray, **kwargs: Any) -> np.ndarray:
         p1, p2, p3, p4 = self.points
 
         thickness = kwargs.get('thickness', 1)
 
-        cv2.line(image, (int(p2[0]),int(p2[1])), (int(p3[0]),int(p3[1])), (0,0,255), thickness)
-        cv2.line(image, (int(p4[0]),int(p4[1])), (int(p1[0]),int(p1[1])), (0,0,255), thickness)
-        cv2.line(image, (int(p1[0]),int(p1[1])), (int(p2[0]),int(p2[1])), (255,0,0), thickness * 3)
-        cv2.line(image, (int(p3[0]),int(p3[1])), (int(p4[0]),int(p4[1])), (255,0,0), thickness * 3)
+        cv2.line(image, (int(p2[0]), int(p2[1])), (int(p3[0]), int(p3[1])), (0, 0, 255), thickness)
+        cv2.line(image, (int(p4[0]), int(p4[1])), (int(p1[0]), int(p1[1])), (0, 0, 255), thickness)
+        cv2.line(image, (int(p1[0]), int(p1[1])), (int(p2[0]), int(p2[1])), (255, 0, 0), thickness * 3)
+        cv2.line(image, (int(p3[0]), int(p3[1])), (int(p4[0]), int(p4[1])), (255, 0, 0), thickness * 3)
 
         return image
 
     def to_3d(self,
               depth_image: np.ndarray,
               intrinsic: PinholeCameraIntrinsic,
-              depth_lookup_method: DepthLookupMethod = DepthLookupMethod.CENTER_POINT):
+              depth_lookup_method: DepthLookupMethod = DepthLookupMethod.CENTER_POINT) -> 'ParallelGripperGrasp3D':
 
         from .grasp_3d import ParallelGripperGrasp3D
 
@@ -405,13 +420,13 @@ class RectangleGrasp(Grasp2D):
 
         return parallel_grasp
 
-    def _compute_rotation_matrix(self, points_3d):
+    def _compute_rotation_matrix(self, points_3d: np.ndarray) -> np.ndarray:
         upper_point = points_3d[:2].mean(axis=0)
         open_point = points_3d[1:2].mean(axis=0)
         open_points_vector = open_point - points_3d.mean(axis=0)
         upper_points_vector = upper_point - points_3d.mean(axis=0)
-        open_point_norm = np.linalg.norm(open_points_vector, axis = 1).reshape(-1, 1)
-        upper_point_norm = np.linalg.norm(upper_points_vector, axis = 1).reshape(-1, 1)
+        open_point_norm = np.linalg.norm(open_points_vector, axis=1).reshape(-1, 1)
+        upper_point_norm = np.linalg.norm(upper_points_vector, axis=1).reshape(-1, 1)
 
         unit_open_points_vector = open_points_vector / open_point_norm
         unit_upper_points_vector = upper_points_vector / upper_point_norm
@@ -420,3 +435,7 @@ class RectangleGrasp(Grasp2D):
         rotation = np.dstack((x_axis, unit_open_points_vector, unit_upper_points_vector))
 
         return rotation
+
+    @classmethod
+    def from_mira_json(cls: Type[RectT], json: Dict) -> RectT:
+        raise NotImplementedError()

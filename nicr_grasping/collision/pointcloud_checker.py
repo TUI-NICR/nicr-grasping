@@ -1,14 +1,16 @@
+from typing import Optional, Dict, Any
+
 import numpy as np
 
 from .collision_checker import CollisionChecker
-from ..datatypes.grasp import ParallelGripperGrasp3D
+from ..datatypes.grasp import ParallelGripperGrasp3D, Grasp3D
+from ..datatypes.intrinsics import PinholeCameraIntrinsic
 
 
-def pointcloud_from_depthimage(depth_image, intrinsics, anchor=np.zeros((1, 2)), scaling=np.ones((1, 2))):
-    num_valid_points = (depth_image > 0).sum()
-
-    pc = np.zeros((num_valid_points, 3))
-
+def pointcloud_from_depthimage(depth_image: np.ndarray,
+                               intrinsics: PinholeCameraIntrinsic,
+                               anchor: np.ndarray = np.zeros((1, 2)),
+                               scaling: np.ndarray = np.ones((1, 2))) -> np.ndarray:
     height, width, _ = depth_image.shape
 
     u, v = np.meshgrid(
@@ -36,33 +38,42 @@ def pointcloud_from_depthimage(depth_image, intrinsics, anchor=np.zeros((1, 2)),
 
 
 class PointCloudChecker(CollisionChecker):
-    def __init__(self, intrinsics=None):
+    def __init__(self,
+                 intrinsics: Optional[PinholeCameraIntrinsic] = None) -> None:
         self.intrinsics = intrinsics
-        self.point_cloud = None
-        self._point_labels = None
+        self.point_cloud: np.ndarray = np.ndarray((0, 4))
+        self._point_labels: Optional[np.ndarray] = None
 
-        self._collision_info = None
+        self._collision_info: Optional[Dict[str, Any]] = None
         self._collision_info_is_valid = False
 
     @property
-    def collision_info(self):
-        if self._collision_info_is_valid:
+    def collision_info(self) -> Dict[str, Any]:
+        if self._collision_info_is_valid and self._collision_info is not None:
             return self._collision_info
-        else:
-            return None
 
-    def set_depth_image(self, depth_image, anchor=np.zeros((1, 2)), scaling=np.ones((1, 2))):
+        raise RuntimeError("Requesting collision info before collision check")
+
+    def set_depth_image(self,
+                        depth_image: np.ndarray,
+                        anchor: np.ndarray = np.zeros((1, 2)),
+                        scaling: np.ndarray = np.ones((1, 2)),
+                        subsampling: int = 2) -> None:
         if self.intrinsics is None:
             raise ValueError("intrinsics must be set before setting a depth image")
 
         pc = pointcloud_from_depthimage(depth_image, self.intrinsics, anchor, scaling)
+        pc = pc[::subsampling]
+        # print(pc.shape)
 
         # save pc as homogeneous coordinates as we will transform it with a 4x4 matrix
         self.point_cloud = np.concatenate([pc, np.ones((len(pc), 1))], axis=-1)
 
         self._collision_info_is_valid = False
 
-    def set_point_cloud(self, point_cloud, labels=None):
+    def set_point_cloud(self,
+                        point_cloud: np.ndarray,
+                        labels: Optional[np.ndarray] = None) -> None:
         pc_shape = point_cloud.shape
 
         assert len(pc_shape) == 2
@@ -81,7 +92,10 @@ class PointCloudChecker(CollisionChecker):
 
         self._collision_info_is_valid = False
 
-    def check_collision(self, grasp: ParallelGripperGrasp3D, **kwargs):
+    def check_collision(self,
+                        grasp: Grasp3D,
+                        frames: Dict[str, np.ndarray] = {},
+                        **kwargs: Any) -> bool:
 
         assert isinstance(grasp, ParallelGripperGrasp3D)
 
@@ -90,10 +104,16 @@ class PointCloudChecker(CollisionChecker):
         #       we do this with a large margin to not remove to many points
         # 2. transform the point cloud to the grasp frame
         # 3. check if any point is inside the gripper by thresholding the pointcloud
+        gripper_depth_base = grasp.gripper_parameters.base_depth
+        gripper_finger_width = grasp.gripper_parameters.finger_width
+        gripper_finger_depth = grasp.gripper_parameters.finger_depth
+
+        gripper_base_offset = grasp.gripper_parameters.base_offset
 
         grasp_position = grasp.position
-        min_corner = grasp_position - 0.1
-        max_corner = grasp_position + 0.1
+        # add margin of 5cm as our max width for grasps is 10cm
+        min_corner = grasp_position - (0.05 + gripper_finger_width)
+        max_corner = grasp_position + (0.05 + gripper_finger_width)
 
         cropped_point_cloud = self.point_cloud[
             np.logical_and(self.point_cloud[:, :3] >= min_corner, self.point_cloud[:, :3] <= max_corner).all(axis=1)
@@ -104,21 +124,6 @@ class PointCloudChecker(CollisionChecker):
         transformed_point_cloud = (np.linalg.inv(grasp_pose) @ cropped_point_cloud.T).T
 
         # crop pointcloud to the gripper bounding box
-
-        # parameters taken from graspnetAPI
-        # TODO: move these parameters to a config file or class for better parameter management
-        # NOTE: naming convention is as follows:
-        #       - extent in x direction: width
-        #       - extent in y direction: height
-        #       - extent in z direction: depth
-        # TODO: picture of what the gipper looks like in the grasp frame
-
-        gripper_depth_base = 0.01
-        gripper_finger_width = 0.01
-        gripper_finger_depth = 0.04
-
-        gripper_base_offset = 0.02
-
         min_z = -gripper_depth_base - gripper_base_offset
         max_z = gripper_finger_depth - gripper_base_offset
 
@@ -149,13 +154,13 @@ class PointCloudChecker(CollisionChecker):
         num_collisions_right = collision_right.sum()
 
         self._collision_info = {
-            'base': int(num_collisions_base),
-            'left': int(num_collisions_left),
-            'right': int(num_collisions_right),
-            'cropped_pc': pc,
-            'base_collision_points': self.point_cloud[pc_indices][collision_base],
-            'left_collision_points': self.point_cloud[pc_indices][collision_left],
-            'right_collision_points': self.point_cloud[pc_indices][collision_right]
+            'collision_base': int(num_collisions_base),
+            'collision_left': int(num_collisions_left),
+            'collision_right': int(num_collisions_right),
+            # 'cropped_pc': pc,
+            # 'base_collision_points': self.point_cloud[pc_indices][collision_base],
+            # 'left_collision_points': self.point_cloud[pc_indices][collision_left],
+            # 'right_collision_points': self.point_cloud[pc_indices][collision_right]
         }
         self._collision_info_is_valid = True
 

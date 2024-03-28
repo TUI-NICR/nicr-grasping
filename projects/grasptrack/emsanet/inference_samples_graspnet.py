@@ -1,6 +1,5 @@
 # -*- coding: utf-8 -*-
 """
-.. codeauthor:: Mona Koehler <mona.koehler@tu-ilmenau.de>
 .. codeauthor:: Daniel Seichter <daniel.seichter@tu-ilmenau.de>
 .. codeauthor:: Benedict Stephan <benedict.stephan@tu-ilmenau.de>
 """

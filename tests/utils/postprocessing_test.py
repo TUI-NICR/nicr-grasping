@@ -35,18 +35,18 @@ def test_model_output_to_grasplist(rectangle_grasp_list: RectangleGraspList, mod
 
     grasps = convert_model_output_to_grasps(label_img, num_grasps=len(rectangle_grasp_list), min_distance=5)
 
-    grasps.sort()
-    rectangle_grasp_list.sort()
+    grasps.sort_by_quality()
+    rectangle_grasp_list.sort_by_quality()
 
-    assert len(grasps.grasps) == len(rectangle_grasp_list.grasps), print(len(grasps.grasps), len(rectangle_grasp_list.grasps))
+    assert len(grasps) == len(rectangle_grasp_list), print(len(grasps), len(rectangle_grasp_list))
     for grasp in grasps:
         if mode==RectangleGraspDrawingMode.GAUSS:
-            assert grasp in rectangle_grasp_list.grasps, print((
+            assert grasp in rectangle_grasp_list, print((
                     "Maybe there is a round-off error"
                     " in max quality coordinates while using RectangleGraspDrawingMode.GAUSS?"
                 ))
         else:
-            assert grasp in rectangle_grasp_list.grasps
+            assert grasp in rectangle_grasp_list
 
 if __name__=="__main__":
     test_model_output_to_grasplist(debug_in_main_rectangle_grasp_list())

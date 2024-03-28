@@ -1,14 +1,16 @@
-import socket
 import os
+
 from pathlib import Path
 
-GRASPNET_PATH = Path('SET_PATH_HERE')
+GRASPNET_VAR_NAME = 'NICR_GRASPING_GRASPNET_PATH'
 
-def graspnet_dataset_path():
-    if 'GRASPNET_PATH' in os.environ:
-        path = Path(os.environ['GRASPNET_PATH'])
-    else:
-        path = GRASPNET_PATH
+
+def graspnet_dataset_path() -> Path:
+    graspnet_path = os.environ.get(GRASPNET_VAR_NAME)
+    if graspnet_path is None:
+        raise ValueError('Graspnet dataset path not set. Please set the environment variable ' + GRASPNET_VAR_NAME)
+
+    path = Path(graspnet_path)
 
     if not path.exists():
         raise FileNotFoundError('Graspnet dataset does not exists for this device. Searched in ' + str(path))

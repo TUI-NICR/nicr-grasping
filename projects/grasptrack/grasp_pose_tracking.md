@@ -1,5 +1,11 @@
 # GraspTrack: Object and Grasp Pose Tracking of Arbitrary Objects
 
+<div align="center">
+      <a href="https://youtu.be/Orpry9kwxiQ"><img src="https://img.youtube.com/vi/Orpry9kwxiQ/maxresdefault.jpg" style="width: 70%;"></a>
+      <br>(Click on the image to open YouTube video)
+      <br><br>
+</div>
+
 We provide code for evaluating grasp poses for each object instead of the whole frame.
 Additionally, we provide model weights for EMSANet used in our work.
 
@@ -10,10 +16,9 @@ The remaining weights used in this work are already published:
 ## Evaluation
 
 We reimplemented the evaluation pipeline from GraspNet-1Billion as the original code was not designed to used predifined assignments of grasps and objects.
-In the original pipeline a grasp was assigned its object based on the distance to the pointcloud.
 For evaluating grasp quality we use the same code as graspnetAPI based on dexnet therefore computed scores remain the same.
 
-The `eval_scene.py` script can be used to evaluate grasps saved in the graspnetAPI format while taking into account the predifined object assignments.
+The `evaluate_graspnet.py` script can be used to evaluate grasps saved in the graspnetAPI format while taking into account the predifined object assignments.
 
 In addition our evaluation script saves results in form of CSV files, which can be used for better understand details of the evaluation (e.g. how many grasps are present per object, which grasps where suppressed by the NMS).
 

@@ -9,7 +9,7 @@ from . import CONVERTER_REGISTRY
 from . import logger as baselogger
 
 
-def graspnetrect_to_grasp2d(graspnet_grasp : RectGrasp) -> RectangleGrasp:
+def graspnetrect_to_grasp2d(graspnet_grasp: RectGrasp) -> RectangleGrasp:
 
     # invert x and y position
     # needed because different coordinate systems (matrix vs image)
@@ -28,12 +28,13 @@ def graspnetrect_to_grasp2d(graspnet_grasp : RectGrasp) -> RectangleGrasp:
     res = RectangleGrasp(quality=graspnet_grasp.score,
                          center=center.reshape(-1, 2),
                          length=graspnet_grasp.height,
-                         width=width,
-                         angle=angle)
+                         width=width,   # type: ignore
+                         angle=angle)   # type: ignore
 
     return res
 
-def grasp2d_to_graspnetrect(grasp2d : RectangleGrasp) -> RectGrasp:
+
+def grasp2d_to_graspnetrect(grasp2d: RectangleGrasp) -> RectGrasp:
     # parameters needed: [center_x, center_y, open_x, open_y, height, score, object_id]
     center_x, center_y = grasp2d.center[0]
     open_x, open_y = np.mean(grasp2d.points[:2], axis=0)
@@ -43,11 +44,13 @@ def grasp2d_to_graspnetrect(grasp2d : RectangleGrasp) -> RectGrasp:
 
     return RectGrasp(params)
 
-def graspnetrectlist_to_grasp2dlist(graspnetrectlist : RectGraspGroup) -> RectangleGraspList:
+
+def graspnetrectlist_to_grasp2dlist(graspnetrectlist: RectGraspGroup) -> RectangleGraspList:
     res = [CONVERTER_REGISTRY.convert(grasp, RectangleGrasp) for grasp in graspnetrectlist]
     return RectangleGraspList(res)
 
-def grasp2dlist_to_graspnetrectlist(grasp2dlist : RectangleGraspList) -> RectGraspGroup:
+
+def grasp2dlist_to_graspnetrectlist(grasp2dlist: RectangleGraspList) -> RectGraspGroup:
     grasp_converted = [CONVERTER_REGISTRY.convert(grasp, RectGrasp) for grasp in grasp2dlist]
     res = RectGraspGroup()
 
@@ -56,10 +59,12 @@ def grasp2dlist_to_graspnetrectlist(grasp2dlist : RectangleGraspList) -> RectGra
 
     return res
 
-def grasp3d_to_graspnetgrasp(grasp3d : ParallelGripperGrasp3D) -> Grasp:
+
+def grasp3d_to_graspnetgrasp(grasp3d: ParallelGripperGrasp3D) -> Grasp:
     # params needed: [score, width, height, depth, rotation_matrix(9), translation(3), object_id]
 
-    # definition of grasp is different in MIRA so we need to rotate the grasp
+    # definition of grasp is different in MIRA and therefore our python package so we need to rotate the grasp
+    # NOTE: this results in switching the meaning of left and right finger
     rotation_fix = R.from_euler('xy', [90, -90], degrees=True).as_matrix()
 
     grasp_params = np.zeros(17)
@@ -77,6 +82,7 @@ def grasp3d_to_graspnetgrasp(grasp3d : ParallelGripperGrasp3D) -> Grasp:
 
     return Grasp(grasp_params)
 
+
 def parallelgrasp3dlist_to_graspgroup(grasplist: ParallelGripperGrasp3DList) -> GraspGroup:
     res = GraspGroup()
     for grasp in grasplist:
@@ -84,7 +90,8 @@ def parallelgrasp3dlist_to_graspgroup(grasplist: ParallelGripperGrasp3DList) -> 
 
     return res
 
-def graspnetgrasp_to_grasp3d(graspnet_grasp : Grasp) -> ParallelGripperGrasp3D:
+
+def graspnetgrasp_to_grasp3d(graspnet_grasp: Grasp) -> ParallelGripperGrasp3D:
     grasp = ParallelGripperGrasp3D()
 
     rotation_fix = R.from_euler('xy', [90, -90], degrees=True).as_matrix()
@@ -99,12 +106,14 @@ def graspnetgrasp_to_grasp3d(graspnet_grasp : Grasp) -> ParallelGripperGrasp3D:
 
     return grasp
 
-def graspgroup_to_parallelgrasp3dlist(graspgroup : GraspGroup) -> ParallelGripperGrasp3DList:
+
+def graspgroup_to_parallelgrasp3dlist(graspgroup: GraspGroup) -> ParallelGripperGrasp3DList:
     grasps = []
     for grasp in graspgroup:
         grasps.append(CONVERTER_REGISTRY.convert(grasp, ParallelGripperGrasp3D))
 
     return ParallelGripperGrasp3DList(grasps)
+
 
 CONVERTER_REGISTRY.register(RectGrasp, RectangleGrasp, graspnetrect_to_grasp2d)
 CONVERTER_REGISTRY.register(RectangleGrasp, RectGrasp, grasp2d_to_graspnetrect)

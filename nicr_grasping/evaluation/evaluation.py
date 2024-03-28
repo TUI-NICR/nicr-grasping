@@ -1,47 +1,30 @@
-import os
-import os.path as osp
-import sys
-from typing import List, Union, Optional, Any
-from dataclasses import dataclass
+from typing import Any, Dict
 
 import numpy as np
-import pandas as pd
 
-import matplotlib.pyplot as plt
-import open3d as o3d
-
-from ..datatypes.transform import Pose
-from ..datatypes.grasp import GraspList
 from ..datatypes.grasp_conversion import CONVERTER_REGISTRY
+from ..datatypes.grasp.grasp_lists import ParallelGripperGrasp3DList
+from ..datatypes.objects.graspable_objects import ObjectModel
 
-from ..collision import PointCloudChecker
-
-from ..external.dexnet.grasping.graspable_object import GraspableObject3D
-# from ...external.dexnet.
-from ..external.meshpy import ObjFile, SdfFile, Mesh3D
 from ..external.dexnet.grasping.grasp import ParallelJawPtGrasp3D
 from ..external.dexnet.grasping.quality import PointGraspMetrics3D
 from ..external.dexnet.grasping.grasp_quality_config import GraspQualityConfigFactory
 
 from . import EvalParameters, EvalResults
-from .scene import Scene
-from ..datatypes.objects import ObjectModel, CollisionObject
 
 
-MODEL_CACHE_DIR = '/tmp/model_cache'
-
-
-def get_config():
+# TODO: this should be a dataclass. this would need some rewriting of dexnet code
+def get_config() -> dict:
     '''
      - return the config dict
     '''
-    config = dict()
-    force_closure = dict()
+    config: Dict[str, Any] = dict()
+    force_closure: Dict[str, Any] = dict()
     force_closure['quality_method'] = 'force_closure'
     force_closure['num_cone_faces'] = 8
     force_closure['soft_fingers'] = 1
     force_closure['quality_type'] = 'quasi_static'
-    force_closure['all_contacts_required']= 1
+    force_closure['all_contacts_required'] = 1
     force_closure['check_approach'] = False
     force_closure['torque_scaling'] = 0.01
     force_closure['wrench_norm_thresh'] = 0.001
@@ -51,24 +34,26 @@ def get_config():
     return config
 
 
-def eval_grasps_on_model(grasps, model, eval_parameters: EvalParameters) -> EvalResults:
+def eval_grasps_on_model(grasps: ParallelGripperGrasp3DList,
+                         model: ObjectModel,
+                         eval_parameters: EvalParameters) -> EvalResults:
     config = get_config()
 
-    # make copy of grasps as we are transforming them
-    grasps_copy = grasps.copy()
+    results = EvalResults(grasps, eval_parameters)
+    # NOTE: after constructing the results object we only work with the underlying dataframe
+    #       through the results.data attribute as this automatically keeps the order of the grasps
+    #       through its index. This allows to keep correspondences between the results and the original grasps
+    #       even if the order of grasps is changed during evaluation (e.g. by sorting by confidence).
 
-    results = EvalResults(grasps_copy, eval_parameters)
-    min_friction = np.ones(len(grasps_copy)) * np.nan
-    is_in_contact_list = np.zeros(len(grasps_copy)).astype(bool)
+    results.add_info('min_friction', np.nan)
+    results.add_info('contact', False)
+    results.add_info('contact_points', None)
 
-    results.add_info('min_friction', min_friction)
-    results.add_info('contact', is_in_contact_list)
+    for grasp_index in results.data.index:
 
-    # transform grasps from camera frame into object frame
-    grasps_copy.transform(model.pose.inverse())
+        grasp = results.data.at[grasp_index, 'grasp']
 
-    for grasp_index in range(len(grasps_copy)):
-        grasp = grasps_copy[grasp_index]
+        grasp.transform(model.pose.inverse())
         dexnet_grasp = CONVERTER_REGISTRY.convert(grasp, ParallelJawPtGrasp3D)
 
         # compute contact points of grasp on model
@@ -76,14 +61,19 @@ def eval_grasps_on_model(grasps, model, eval_parameters: EvalParameters) -> Eval
         # as only the friction coefficient changes
         is_in_contact, contacts = dexnet_grasp.close_fingers(
             model,
-            check_approach=config['metrics']['force_closure']['check_approach']
+            check_approach=config['metrics']['force_closure']['check_approach'],
         )
 
         # if grasp does not result in contact we can skip it
         # otherwise update list
         if not is_in_contact:
             continue
-        results.update_info_of_grasp('contact', grasp_index, True)
+        # results.update_info_of_grasp('contact', grasp_index, True)
+        # results.update_info_of_grasp('contact_points', grasp_index, contacts)
+        # row.contact = True
+        # row.contact_points = contacts
+        results.data.at[grasp_index, 'contact'] = True
+        results.data.at[grasp_index, 'contact_points'] = contacts
 
         # iterate over friction coefficients
         # starting with the hightes one
@@ -94,7 +84,6 @@ def eval_grasps_on_model(grasps, model, eval_parameters: EvalParameters) -> Eval
 
         for friction in np.sort(friction_coefficients)[::-1]:
 
-            # TODO: this needs a better solution
             config['metrics']['force_closure']['friction_coef'] = friction
             dexnet_config = GraspQualityConfigFactory.create_config(config['metrics']['force_closure'])
 
@@ -105,7 +94,8 @@ def eval_grasps_on_model(grasps, model, eval_parameters: EvalParameters) -> Eval
                 contacts=contacts)
 
             if is_force_closure:
-                results.update_info_of_grasp('min_friction', grasp_index, friction)
+                # results.update_info_of_grasp('min_friction', grasp_index, friction)
+                results.data.at[grasp_index, 'min_friction'] = friction
             else:
                 break
 

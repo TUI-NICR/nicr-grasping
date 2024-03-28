@@ -4,15 +4,15 @@ pytest.importorskip('graspnetAPI')
 
 import numpy as np
 
-import matplotlib.pyplot as plt
-
-from nicr_grasping.evaluation.evaluation import eval_grasps_on_model, ObjectModel, EvalParameters, Scene
-from nicr_grasping.datatypes.grasp import ParallelGripperGrasp3DList, ParallelGripperGrasp3D
+from nicr_grasping.evaluation import EvalParameters
+from nicr_grasping.evaluation.evaluation import eval_grasps_on_model
+from nicr_grasping.collision import PointCloudChecker
+from nicr_grasping.datatypes.grasp import ParallelGripperGrasp3DList
+from nicr_grasping.datatypes.objects import ObjectModel, Scene
 from nicr_grasping.datatypes.grasp_conversion import CONVERTER_REGISTRY
 from nicr_grasping import graspnet_dataset_path
 
 from nicr_grasping.external.meshpy import ObjFile, SdfFile
-from nicr_grasping.external.dexnet.grasping.grasp import ParallelJawPtGrasp3D
 
 from graspnetAPI import GraspNet, GraspGroup
 from graspnetAPI.utils.rotation import batch_viewpoint_params_to_matrix
@@ -81,9 +81,10 @@ def get_graspnet_grasp_labels():
 @pytest.mark.benchmark(group="eval")
 def test_model_eval():
 
-    params = EvalParameters(top_k=50, friction_coefficients=np.linspace(0.1, 1.1, 11))
+    params = EvalParameters(top_k=50, friction_coefficients=np.linspace(0.1, 1.1, 11)[::-1])
 
     grasps = get_graspnet_grasp_labels()[:500]
+    # grasps.sort_by_score()
     grasp_list = CONVERTER_REGISTRY.convert(grasps, ParallelGripperGrasp3DList)
 
     mesh = ObjFile(MODEL_PATH)
@@ -109,6 +110,7 @@ def test_scene_eval():
     params = EvalParameters(top_k=50, friction_coefficients=np.linspace(0.1, 1.1, 11))
 
     grasps = get_graspnet_grasp_labels()[:500]
+    # grasps.sort_by_score()
     grasp_list = CONVERTER_REGISTRY.convert(grasps, ParallelGripperGrasp3DList)
 
     mesh = ObjFile(MODEL_PATH)
@@ -119,7 +121,7 @@ def test_scene_eval():
         sdf.read()
     )
 
-    scene = Scene()
+    scene = Scene(PointCloudChecker())
     scene.add_object(model)
 
     res = eval_grasps_on_model(

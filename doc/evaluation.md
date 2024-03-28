@@ -16,7 +16,7 @@ This step can be implemented any way.
 ---
 **NOTE**
 
-Current scripts expect a model trained with detectron2.
+Current scripts expect a model trained with detectrion2.
 
 ---
 
@@ -28,7 +28,6 @@ For models trained with detectron2 you can use `run_on_graspnet.py` as follows:
 python run_on_graspnet.py --config <PATH_TO_DETECTRON2_CONFIG>
 ```
 This will load the model and weights called `model_final.pth` in the same folder as the config file and compute predictions on the test set of graspnet.
-If you want to specify different weights you can do so by adding `MODEL.WEIGHTS <PATH_TO_WEIGHTS>` as command line parameters.
 
 ### Run evaluation
 
@@ -54,6 +53,10 @@ optional arguments:
   --log-eval            If supplied logs will be saved here as json.
   --num-worker NUM_WORKER
 ```
+
+Example usage:
+
+`python run_evaluation.py <PATH_TO_RESULTS> --split test_seen --log-eval --num-worker 5`
 
 ---
 

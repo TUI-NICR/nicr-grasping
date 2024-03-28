@@ -4,8 +4,8 @@ import numpy as np
 import cv2
 
 from nicr_grasping.collision import PointCloudChecker
-from nicr_grasping.datatypes import ParallelGripperGrasp3D, PinholeCameraIntrinsic
-from nicr_grasping.datatypes.grasp_conversion import CONVERTER_REGISTRY
+from nicr_grasping.datatypes.grasp import ParallelGripperGrasp3D
+from nicr_grasping.datatypes.intrinsics import PinholeCameraIntrinsic
 
 
 def test_pointcloud_checker():
@@ -75,16 +75,16 @@ def test_scaled_and_cropped_depth_image():
     cropped_pc = checker.point_cloud
 
     for point in cropped_pc:
-        assert any(np.equal(original_pc, point).all(1))
+        assert any(np.equal(original_pc, point).all(0))
 
     checker.set_depth_image(scaled_depth_image, scaling=scaled_depth_image_scaling)
     scaled_pc = checker.point_cloud
 
     for point in scaled_pc:
-        assert any(np.equal(original_pc, point).all(1))
+        assert any(np.equal(original_pc, point).all(0))
 
     checker.set_depth_image(cropped_and_scaled_depth_image, cropped_and_scaled_depth_image_anchor, cropped_and_scaled_depth_image_scaling)
     cropped_and_scaled_pc = checker.point_cloud
 
     for point in cropped_and_scaled_pc:
-        assert any(np.equal(original_pc, point).all(1))
+        assert any(np.equal(original_pc, point).all(0))

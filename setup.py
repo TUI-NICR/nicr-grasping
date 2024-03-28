@@ -28,11 +28,13 @@ def run_setup():
               'scikit-image',
               'matplotlib',
               'torch',
+              'torchmetrics',
               'pandas',
               'autolab_core',
               'trimesh',
               'open3d',
-              'cvxopt'
+              'cvxopt',
+              'pyhull',
           ],
           packages=find_packages())
 

@@ -5,6 +5,7 @@ class CameraIntrinsic:
     def __init__(self) -> None:
         pass
 
+
 class PinholeCameraIntrinsic(CameraIntrinsic):
     def __init__(self,
                  fx: float = 0,
@@ -20,23 +21,23 @@ class PinholeCameraIntrinsic(CameraIntrinsic):
         self._cy = cy
 
     @property
-    def cx(self):
+    def cx(self) -> float:
         return self._cx
 
     @property
-    def cy(self):
+    def cy(self) -> float:
         return self._cy
 
     @property
-    def fx(self):
+    def fx(self) -> float:
         return self._fx
 
     @property
-    def fy(self):
+    def fy(self) -> float:
         return self._fy
 
     @property
-    def camera_matrix(self):
+    def camera_matrix(self) -> np.ndarray:
         res = np.zeros((3, 3))
         res[0, 0] = self._fx
         res[1, 1] = self._fy
@@ -47,8 +48,8 @@ class PinholeCameraIntrinsic(CameraIntrinsic):
         return res
 
     def pixel_to_point(self,
-                        pixels: np.ndarray,
-                        depth: float):
+                       pixels: np.ndarray,
+                       depth: float) -> np.ndarray:
         """Converts pixel coordinates into 3d positions based on depth and intrinsics.
 
         Parameters
@@ -65,12 +66,12 @@ class PinholeCameraIntrinsic(CameraIntrinsic):
         """
         res = np.zeros((len(pixels), 3))
         res[:, 2] = depth
-        res[:, 0] = res[:, 2] / self._fx * (pixels[:, 0] - self._cx) # mm
-        res[:, 1] = res[:, 2] / self._fy * (pixels[:, 1] - self._cy) # mm
+        res[:, 0] = res[:, 2] / self._fx * (pixels[:, 0] - self._cx)  # mm
+        res[:, 1] = res[:, 2] / self._fy * (pixels[:, 1] - self._cy)  # mm
 
         return res
 
-    def point_to_pixel(self, points_3d):
+    def point_to_pixel(self, points_3d: np.ndarray) -> np.ndarray:
         res = np.zeros((len(points_3d), 2))
 
         res[:, 0] = points_3d[:, 0] / points_3d[:, 2]

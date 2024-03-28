@@ -1,8 +1,11 @@
+from typing import Tuple
+
 import numpy as np
 
 from scipy.spatial.transform import Rotation as R
 
-def mira_json_to_pose(json_object: dict):
+
+def mira_json_to_pose(json_object: dict) -> Tuple[np.ndarray, np.ndarray]:
 
     position = np.array([
         json_object['X'],

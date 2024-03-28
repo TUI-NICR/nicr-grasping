@@ -3,9 +3,10 @@ import scipy.sparse as sp
 
 pytest.importorskip('graspnetAPI')
 
+from nicr_grasping.utils.paths import graspnet_dataset_path
 from nicr_grasping.dataset.interfaces.graspnet_interface import GraspNetInterface
 
-GRASPNET_ROOT = '/datasets_nas/grasping/graspnet'
+GRASPNET_ROOT = graspnet_dataset_path()
 
 def test_graspnet_load(tmpdir):
 

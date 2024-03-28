@@ -7,7 +7,7 @@ import matplotlib.pyplot as plt
 
 from pathlib import Path
 
-from typing import List, Optional, Tuple, Union
+from typing import List, Dict, Tuple, Union
 from nicr_grasping.datatypes.grasp.grasp_lists import GraspList
 
 from nicr_grasping.datatypes.modalities import get_modality_from_name
@@ -24,33 +24,27 @@ class DatasetInfo:
             self._metadata = json.load(f)
 
     def get_example_samples(self,
-                            sample_ids: Optional[int]=None,
-                            num_samples: int=1):
-        if sample_ids is not None and isinstance(sample_ids, int):
-            sample_ids = [sample_ids]
-
-        if num_samples and not sample_ids:
-            sample_ids = np.random.choice(list(range(self._metadata['num_total_samples'])), num_samples)
-        elif not num_samples and sample_ids:
-            num_samples = len(sample_ids)
+                            sample_ids: Union[List[int], None] = None,
+                            num_samples: int = 1) -> Dict[int, Tuple[List[ModalityBase], Dict[str, np.ndarray], GraspList]]:
+        _sample_ids = sample_ids or np.random.choice(list(range(self._metadata['num_total_samples'])), num_samples).tolist()
 
         sample_data = {}
-        for sample_id in sample_ids:
+        for sample_id in _sample_ids:
             sample_data[sample_id] = self._load_sample(sample_id)
 
         return sample_data
 
     @property
-    def sample_size(self):
+    def sample_size(self) -> int:
         return self._metadata['num_total_samples']
 
     @property
-    def modalities(self):
+    def modalities(self) -> List[str]:
         return self._metadata['modalities']
 
-    def _load_sample(self, sample_id) -> Tuple[List[ModalityBase], GraspList]:
+    def _load_sample(self, sample_id: int) -> Tuple[List[ModalityBase], Dict[str, np.ndarray], GraspList]:
         sample_i_str = str(sample_id).rjust(len(str(self._metadata['num_total_samples'])), '0')
-        grasps = RectangleGraspList.load_from_file(os.path.join(self._root_path / 'grasp_lists' / (sample_i_str + '.pkl')))
+        grasps = RectangleGraspList.load(os.path.join(self._root_path / 'grasp_lists' / (sample_i_str + '.pkl')))
 
         inputs = []
 
@@ -72,20 +66,20 @@ class DatasetInfo:
 
     def plot_example_images(self,
                             num_samples: int = 1,
-                            top_k: int = None):
+                            top_k: Union[int, None] = None) -> Dict[int, Tuple[plt.Figure, List[plt.Axes]]]:
         sample_idx = np.random.choice(list(range(self._metadata['num_total_samples'])), num_samples)
 
         res = {}
 
         for sample_i in sample_idx:
             sample_i_str = str(sample_i).rjust(len(str(self._metadata['num_total_samples'])), '0')
-            grasps = RectangleGraspList.load_from_file(os.path.join(self._root_path / 'grasp_lists' / (sample_i_str + '.pkl')))
-            grasps.sort()
+            grasps = RectangleGraspList.load(os.path.join(self._root_path / 'grasp_lists' / (sample_i_str + '.pkl')))
+            grasps.sort_by_quality()
             if top_k is not None:
                 grasps = grasps[:top_k]
 
             # f, axes = plt.subplots(1, len(self._metadata['modalities']) + 1)
-            f = plt.figure(figsize=(13,5))
+            f = plt.figure(figsize=(13, 5))
             spec = f.add_gridspec(ncols=3, nrows=3)
             axes = []
             for i, modality_str in enumerate(self._metadata['modalities']):
@@ -124,8 +118,7 @@ class DatasetInfo:
 
         return res
 
-
-    def get_summary(self):
+    def get_summary(self) -> None:
         print('Dataset summary:')
         print('\tName:\t\t', self._root_path.stem)
         print('\tNum samples:\t', self._metadata['num_total_samples'])

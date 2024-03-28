@@ -2,7 +2,7 @@ import pickle
 import bz2
 
 from collections import UserList
-from typing import Tuple, List, Union
+from typing import Tuple, List, Union, Sequence, Dict, Any, TypeVar, Type
 
 from pathlib import Path
 
@@ -19,14 +19,15 @@ from .grasp_3d import Grasp3D, ParallelGripperGrasp3D
 from ..transform.pose import Pose
 from ..transform.metrics import DifferenceType, difference
 
-class GraspList(UserList):
-    def __init__(self, grasps: List[Grasp] = []) -> None:
-        super().__init__(grasps)
-        # self.grasps: List[Grasp] = grasps
+T = TypeVar('T', bound='GraspList')
 
-    def add(self, grasp : Grasp) -> None:
+
+class GraspList(UserList):
+    def __init__(self, grasps: Sequence[Grasp] = []) -> None:
+        super().__init__(grasps)
+
+    def add(self, grasp: Grasp) -> None:
         self.append(grasp)
-        # self.grasps.append(grasp)
 
     def __eq__(self, __o: object) -> bool:
         if isinstance(__o, GraspList):
@@ -36,19 +37,18 @@ class GraspList(UserList):
             same_els = [g1 == g2 for g1, g2 in zip(self, __o)]
             return same_len and all(same_els)
 
-    def plot(self, image : np.ndarray, **kwargs) -> np.ndarray:
+        raise RuntimeError(f"Cannot compare GraspList with {__o.__class__.__name__}")
+
+    def plot(self, image: np.ndarray, **kwargs: Any) -> np.ndarray:
         raise NotImplementedError()
 
-    @property
-    def grasps(self):
-        return self.data
-    # def to_type(self, to_type):
-    #     return CONVERTER_REGISTRY.convert(self, to_type)
+    def sort_by_quality(self, reverse: bool = False) -> None:
+        self.data = sorted(self.data, key=lambda x: x.quality, reverse=not reverse)
 
-    def sort(self, reverse : bool = False) -> None:
-        self.data = sorted(self.data, key=lambda x : x.quality, reverse=not reverse)
+    def argsort(self, reverse: bool = False) -> np.ndarray:
+        return np.argsort([g.quality for g in self], axis=0)[::-1 if not reverse else 1]
 
-    def transform(self, transform):
+    def transform(self, transform: Union[Pose, np.ndarray]) -> None:
         transformation_matrix = np.eye(4)
         if isinstance(transform, Pose):
             transformation_matrix = transform.transformation_matrix
@@ -60,31 +60,47 @@ class GraspList(UserList):
         for grasp in self:
             grasp.transform(transformation_matrix)
 
-    def copy(self) -> "GraspList":
+    def copy(self: T) -> T:
         return deepcopy(self)
 
 
 class Grasp2DList(GraspList):
-    def __init__(self, grasps: List[Grasp2D] = []) -> None:
+    def __init__(self, grasps: Sequence[Grasp2D] = []) -> None:
         super().__init__(grasps=grasps)
 
-    def plot(self, image : np.ndarray, **kwargs) -> np.ndarray:
+    def plot(self, image: np.ndarray, **kwargs: Any) -> np.ndarray:
         for grasp in self.data:
             image = grasp.plot(image, **kwargs)
 
         return image
 
-    def scale(self, scale_factor: float):
+    def scale(self, scale_factor: float) -> None:
         [g.scale(scale_factor) for g in self]
 
 
+Grasp3DT = TypeVar('Grasp3DT', bound='Grasp3DList')
+
+
 class Grasp3DList(GraspList):
-    def __init__(self, grasps: List[Grasp3D] = []) -> None:
+    def __init__(self, grasps: Sequence[Grasp3D] = []) -> None:
         super().__init__(grasps=grasps)
 
-    def nms(self, translation_threshold, rotation_threshold):
+    def save(self,
+             file_path: Union[Path, str]) -> None:
+        with open(str(file_path), 'wb') as f:
+            pickle.dump(self.data, f)
+
+    @classmethod
+    def load(cls: Type[Grasp3DT], file_path: Union[Path, str]) -> Grasp3DT:
+        with open(str(file_path), 'rb') as f:
+            grasps = pickle.load(f)
+        return cls(grasps)
+
+    def nms(self,
+            translation_threshold: float,
+            rotation_threshold: float) -> np.ndarray:
         # sort grasps
-        self.sort()
+        self.sort_by_quality()
 
         suppressed = np.zeros(len(self), dtype=bool)
         for gi, grasp in enumerate(self):
@@ -102,27 +118,31 @@ class Grasp3DList(GraspList):
 
                 if diff_trans['error'] < translation_threshold and diff_rot['error'] < rotation_threshold:
                     suppressed[gj] = True
+                    # suppressed_by[gj].append(gi)
 
         return suppressed
 
 
+RectGrasp3DT = TypeVar('RectGrasp3DT', bound='RectangleGraspList')
+
+
 class RectangleGraspList(Grasp2DList):
-    def __init__(self, grasps: List[RectangleGrasp] = []) -> None:
+    def __init__(self, grasps: Sequence[RectangleGrasp] = []) -> None:
         super().__init__(grasps=grasps)
 
     def save(self,
              file_path: Union[Path, str],
-             compressed: bool = False):
+             compressed: bool = False) -> None:
         assert Path(file_path).suffix == '.pkl'
         if compressed:
             with bz2.BZ2File(str(file_path) + '.bz', 'wb') as f:
-                pickle.dump(self.grasps, f)
+                pickle.dump(self.data, f)
         else:
             with open(str(file_path), 'wb') as f:
-                pickle.dump(self.grasps, f)
+                pickle.dump(self.data, f)
 
     @classmethod
-    def from_points(cls, points, qualities):
+    def from_points(cls: Type[RectGrasp3DT], points: np.ndarray, qualities: np.ndarray) -> RectGrasp3DT:
         grasps = []
         for i in range(len(points)):
             g = RectangleGrasp.from_points(points[i].T)
@@ -131,7 +151,7 @@ class RectangleGraspList(Grasp2DList):
         return cls(grasps)
 
     @classmethod
-    def load_from_file(cls, file_path: Union[Path, str]):
+    def load(cls: Type[RectGrasp3DT], file_path: Union[Path, str]) -> RectGrasp3DT:
         suffixes = Path(file_path).suffixes
         if '.npy' in suffixes:
             # for backwards compatibility
@@ -142,11 +162,11 @@ class RectangleGraspList(Grasp2DList):
                 grasps = pickle.load(f)
         else:
             with open(str(file_path), 'rb') as f:
-                grasps = pickle.loads(f.read().replace(b'grasp_benchmark',b'nicr_grasping'))
+                grasps = pickle.load(f)
         return cls(grasps)
 
     @classmethod
-    def load_from_mira_json(cls, json_object: dict):
+    def load_from_mira_json(cls: Type[RectGrasp3DT], json_object: Dict) -> RectGrasp3DT:
         grasps = [
             RectangleGrasp.from_mira_json(grasp_json) for grasp_json in json_object
         ]
@@ -185,11 +205,11 @@ class RectangleGraspList(Grasp2DList):
         return ious
 
     def create_sample_images(self,
-                             shape: Tuple[int],
-                             position: bool=True,
-                             angle: bool=True,
-                             width: bool=True,
-                             mode: RectangleGraspDrawingMode=RectangleGraspDrawingMode.INNER_RECTANGLE) -> List[Union[np.ndarray, None]]:
+                             shape: Tuple[int, int, int],
+                             position: bool = True,
+                             angle: bool = True,
+                             width: bool = True,
+                             mode: RectangleGraspDrawingMode = RectangleGraspDrawingMode.INNER_RECTANGLE) -> List[Union[np.ndarray, None]]:
         """Plot all GraspRectangles as solid rectangles in a numpy array, e.g. as network training data.
 
         Parameters
@@ -223,20 +243,23 @@ class RectangleGraspList(Grasp2DList):
 
         labels = [pos_out, ang_out, width_out]
 
-        self.sort(reverse=True)
+        self.sort_by_quality(reverse=True)
 
-        for gr in self.grasps:
+        for gr in self.data:
             labels = gr.draw_label(labels, mode=mode)
 
         return labels
 
 
+ParallelGrasp3DT = TypeVar('ParallelGrasp3DT', bound='ParallelGripperGrasp3DList')
+
+
 class ParallelGripperGrasp3DList(Grasp3DList):
-    def __init__(self, grasps: List[ParallelGripperGrasp3D] = []) -> None:
+    def __init__(self, grasps: Sequence[ParallelGripperGrasp3D] = []) -> None:
         super().__init__(grasps)
 
     @classmethod
-    def from_mira_json(cls, json_object: dict):
+    def from_mira_json(cls: Type[ParallelGrasp3DT], json_object: Dict) -> ParallelGrasp3DT:
         grasps = [
             ParallelGripperGrasp3D.from_mira_json(grasp_json) for grasp_json in json_object
         ]
