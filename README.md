@@ -18,7 +18,7 @@ This repository was used for the following publications
 ### IROS2022 - On the Importance of Label Encoding and Uncertainty Estimation for Robotic Grasp Detection
 For more details see [here](projects/grasp_encodings_and_uncertainties/iros2022_graspnet_uncertainties.md).
 
-### (Submitted) CASE2024 - GraspTrack: Object and Grasp Pose Tracking for Arbitrary Objects
+### CASE2024 - GraspTrack: Object and Grasp Pose Tracking for Arbitrary Objects
 For more details see [here](projects/grasptrack/grasp_pose_tracking.md).
 
 # Changelog
